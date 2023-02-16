@@ -10,8 +10,13 @@ from .unit_tester import unit_test
 
 @click.group
 def main():
-	print('okay i think it worked')
-	print(os.getcwd())
+	"""
+	this is the entry point for the program
+	look at the local functions imported from the top to see where the next steps are executed.
+	to add more options, import the function, apply the same decorators that you see in the function
+	definitions and add an 'add_argument()' entry below
+	"""
+	pass
 
 main.add_command(evaluate)
 main.add_command(train)
