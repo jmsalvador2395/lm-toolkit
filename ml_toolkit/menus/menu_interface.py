@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 # local imports
-from lm_toolkit.utils.display import prompt_yes_no
+from ml_toolkit.utils.display import prompt_yes_no
+
 def file_explorer(prompt):
 	"""this displays a menu for finding and returning a desired file path
 

@@ -1,0 +1,31 @@
+note : "a quick note about this training run. this note will show up in tensorboard."
+
+general : 
+    model : "word2vec"
+    device : "cuda:1"
+    seed : 123
+    num_proc : 20
+
+model :
+    embedding_dim : 200
+    checkpoint_path : Null
+
+data : 
+    min_freq : 100
+    num_shards : 10
+    cache_dir : "{home}/ds_cache"
+    shuffle : True
+    train_data : "{project_root}/data/wackypedia_lemma/train.csv"
+    train_data_ext : "csv"
+    test_data : Null
+    test_data_ext : Null
+
+training :
+    batch_size : 4096
+    weight_decay : 0
+    num_epochs : 3
+
+task :
+    window_size : 10
+    neg_samples : 15
+    subsampling_threshold : .00001
