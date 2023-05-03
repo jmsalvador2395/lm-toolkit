@@ -8,13 +8,13 @@ with open(requirements_dir, 'r') as f:
 	requirements = f.read().splitlines()
 
 setup(
-	name='ml-toolkit',
+	name='mltoolkit',
 	version='0.0.1',
 	py_modules=['ml-toolkit'],
 	install_requires=requirements,
 	entry_points={
 		'console_scripts' : [
-			'mltoolkit = ml_toolkit:main',
+			'mltoolkit = mltoolkit:main',
 		],
 	}
 )

@@ -1,0 +1,74 @@
+
+general : 
+    device : "cuda:1"
+    seed : 123
+    note : "a quick note about this training run. this note will show up in tensorboard."
+
+model :
+    name : "glove"
+    embedding_dim : 200
+    checkpoint_path : Null
+    vocab_size : 150000
+    weight_decay : 0
+    alpha_weight : .0001
+
+training :
+    batch_size : 4096
+    weight_decay : 0
+    num_epochs : 10
+    eval_freq : 1000
+    ckpt_dir : {{project_root}}/checkpoints/
+
+task :
+    window_size : 10
+
+data : 
+    num_proc : 20
+    min_freq : 100
+    num_shards : 10
+    cache_dir : "{{home}}/ds_cache"
+    shuffle : True
+    train : 
+        path : "wikitext"
+        name: "wikitext-103-raw-v1"
+        split : 
+            - "train"
+    test : 
+        path : 
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+            - 'csv'
+        data_files : 
+            - "{{project_root}}/data/similarity_datasets/EN-MC-30.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-MEN-TR-3k.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-MTurk-287.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-MTurk-771.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-RG-65.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-RW-STANFORD.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-SIMLEX-999.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-SimVerb-3500.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-SimVerb-3500.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-VERB-143.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-WS-353-ALL.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-WS-353-REL.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-WS-353-REL.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-WS-353-SIM.txt"
+            - "{{project_root}}/data/similarity_datasets/EN-YP-130.txt"
+        column_names :
+            - "w1"
+            - "w2"
+            - "score"
+        sep : "\t"
+        

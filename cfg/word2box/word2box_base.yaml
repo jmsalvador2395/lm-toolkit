@@ -1,0 +1,38 @@
+note : "a quick note about this training run. this note will show up in tensorboard."
+
+general : 
+    device : "cuda:1"
+    seed : 123
+
+model :
+    name : "word2box"
+    embedding_dim : 200
+    checkpoint_path : Null
+    vocab_size : 150000
+
+training :
+    batch_size : 4096
+    weight_decay : 0
+    num_epochs : 3
+
+task :
+    window_size : 5
+    neg_samples : 2
+    subsampling_threshold : .00001
+
+data : 
+    num_proc : 20
+    min_freq : 100
+    num_shards : 10
+    cache_dir : "{{home}}/ds_cache"
+    shuffle : True
+    train : 
+        path : "wikitext"
+        name: "wikitext-103-raw-v1"
+        split : 
+            - "train"
+    test : 
+        path: "wikitext"
+        name: "wikitext-103-raw-v1"
+        split :
+            - "validation"

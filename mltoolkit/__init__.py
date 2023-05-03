@@ -2,7 +2,7 @@
 import os
 
 # local imports
-from ml_toolkit import (
+from mltoolkit import (
 	arguments, 
 	training,
 	unit_testing,
@@ -23,7 +23,7 @@ def main():
 	args = arguments.parse()
 
 	# choose execute the desired procedure
-	match args['procedure']:
+	match args.procedure:
 		case 'train':
 			training.train(args)
 		case 'evaluate':

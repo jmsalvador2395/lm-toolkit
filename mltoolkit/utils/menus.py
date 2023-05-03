@@ -5,14 +5,15 @@ import sys
 from pathlib import Path
 
 # local imports
-from ml_toolkit.utils.display import prompt_yes_no
+from mltoolkit.utils.display import binary_prompt
+from mltoolkit.utils import files
 
-def file_explorer(prompt):
+def file_explorer(prompt, start_path=None):
 	"""this displays a menu for finding and returning a desired file path
 
 	:rtype str:
 	"""
-	cwd = os.getcwd()
+	cwd = os.getcwd() if start_path is None else files.get_full_path(start_path)
 	directory = ['../'] + os.listdir(cwd)
 	
 	while True:
@@ -28,7 +29,7 @@ def file_explorer(prompt):
 
 		# exits if the user quit the menu
 		if choice is None:
-			if prompt_yes_no('exit?'):
+			if binary_prompt('exit?'):
 				sys.exit()
 
 		fname = directory[choice]
@@ -40,7 +41,7 @@ def file_explorer(prompt):
 
 		# check if the file is good
 		if os.path.isfile(target):
-			choice = prompt_yes_no(f'is {target} correct?')
+			choice = binary_prompt(f'is {target} correct?')
 			if choice:
 				return target
 		else:

@@ -26,11 +26,11 @@ def parse():
 	# parser for the evaluation procedure
 	parser_eval = subparser.add_parser('eval')
 	parser_eval.add_argument(
-		'checkpoint',
+		'--checkpoint',
 		help='checkpoint path'
 	)
 
 	# parser for unit testing
 	parser_ut = subparser.add_parser('unit_test')
 
-	return vars(parser.parse_args())
+	return parser.parse_args()

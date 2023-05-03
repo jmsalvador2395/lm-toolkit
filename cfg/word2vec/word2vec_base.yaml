@@ -1,0 +1,40 @@
+note : "a quick note about this training run. this note will show up in tensorboard."
+
+general : 
+    device : "cuda:1"
+    seed : 123
+
+model :
+    model : "word2vec"
+    embedding_dim : 200
+    checkpoint_path : Null
+    alpha_weight : .0001
+
+training :
+    batch_size : 4096
+    weight_decay : 0
+    num_epochs : 3
+
+task :
+    window_size : 10
+    neg_samples : 15
+    subsampling_threshold : .00001
+
+data : 
+    num_proc : 20
+    min_freq : 100
+    num_shards : 10
+    cache_dir : "{{home}}/ds_cache"
+    shuffle : True
+    train : 
+        name : "wikitext"
+        is_local : False
+        splits : 
+            - "train"
+    test : 
+        name : Null
+        is_local : False
+        splits :
+            - "train"
+            - "dev"
+            - "test"
