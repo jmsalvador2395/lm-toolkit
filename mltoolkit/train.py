@@ -3,7 +3,7 @@ import yaml
 
 # local imports
 from mltoolkit import utils, cfg_reader
-from .trainer import Trainer
+from . import trainers
 
 def train(args):
     # open menu to find a config file if none is provided
@@ -22,7 +22,7 @@ def train(args):
         )
 
     # load config
-    cfg = cfg_reader.load(config_path)
+    cfg, keywords = cfg_reader.load(config_path)
 
-    trainer = Trainer(cfg)
+    trainer = trainers.select(cfg, keywords)
     trainer.train()

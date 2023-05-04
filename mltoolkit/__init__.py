@@ -4,11 +4,11 @@ import os
 # local imports
 from mltoolkit import (
 	arguments, 
-	training,
 	unit_testing,
 	evaluation,
 	utils
 )
+from .train import train
 
 
 def main():
@@ -25,7 +25,7 @@ def main():
 	# choose execute the desired procedure
 	match args.procedure:
 		case 'train':
-			training.train(args)
+			train(args)
 		case 'evaluate':
 			evaluator.evaluate(args)
 		case 'unit_test':

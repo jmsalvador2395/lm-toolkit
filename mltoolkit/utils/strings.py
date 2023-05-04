@@ -35,7 +35,7 @@ def green(msg: str):
     """
     returns a string in green text
     """
-    Fore.GREEN + msg + Style.RESET_ALL
+    return Fore.GREEN + msg + Style.RESET_ALL
 
 def red(msg: str):
     """

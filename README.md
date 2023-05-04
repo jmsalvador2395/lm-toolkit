@@ -10,4 +10,4 @@ This package is for me to have a central and standardized library for designing 
 	- this allows you to execute the code by just calling `mltoolkit` when your virtual environment is enabled
 
 # Configuration Files
-Browse the [configuration files directory](./cfg_train) to get an overview of the available models and how to train them
+Browse the [configuration files directory](./cfg) to get an overview of the available models and how to train them

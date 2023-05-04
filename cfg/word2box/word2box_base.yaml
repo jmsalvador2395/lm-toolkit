@@ -1,19 +1,20 @@
-note : "a quick note about this training run. this note will show up in tensorboard."
-
 general : 
-    device : "cuda:1"
     seed : 123
+    logdir_base : "{{project_root}}/tensorboard"
+    note : "a quick note about this training run. this note will show up in tensorboard."
 
 model :
     name : "word2box"
     embedding_dim : 200
     checkpoint_path : Null
     vocab_size : 150000
+    ckpt_dir : "{{project_root}}/checkpoints/"
+    device : "cuda:1"
 
-training :
-    batch_size : 4096
+optim :
+    lr : .005
     weight_decay : 0
-    num_epochs : 3
+
 
 task :
     window_size : 5
@@ -23,16 +24,10 @@ task :
 data : 
     num_proc : 20
     min_freq : 100
-    num_shards : 10
+    num_shards : 1
     cache_dir : "{{home}}/ds_cache"
     shuffle : True
-    train : 
-        path : "wikitext"
-        name: "wikitext-103-raw-v1"
-        split : 
-            - "train"
-    test : 
-        path: "wikitext"
-        name: "wikitext-103-raw-v1"
-        split :
-            - "validation"
+    batch_size : 4096
+    num_epochs : 3
+    eval_freq : 1000
+    log_freq : 1000

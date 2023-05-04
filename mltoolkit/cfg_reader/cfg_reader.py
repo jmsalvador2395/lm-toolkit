@@ -16,18 +16,29 @@ def load(path_str: str):
     """
 
     validate.path_exists(path_str)
+    keywords = {
+        'home' : files.homedir(),
+        'project_root' : files.get_project_root(),
+        'timestamp' : strings.now()
+    }
+
+    base_cfg = {
+        'general' : None,
+        'model' : None,
+        'optim' : None,
+        'task' : None,
+        'data' : None,
+    }
+    categories = base_cfg.keys()
 
     with open(path_str, 'r') as f:
         cfg = f.read()
 
     cfg = strings.replace_slots(
         cfg,
-        {
-            'home' : files.homedir(),
-            'project_root' : files.get_project_root(),
-        }
+        keywords
     )
 
-    cfg = yaml.safe_load(cfg)
-    cfg = namedtuple('Config', cfg.keys())(**cfg)
-    return cfg
+    cfg = {**base_cfg, **yaml.safe_load(cfg)}
+    cfg = namedtuple('Config', categories)(**cfg)
+    return cfg, keywords

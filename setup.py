@@ -10,11 +10,11 @@ with open(requirements_dir, 'r') as f:
 setup(
 	name='mltoolkit',
 	version='0.0.1',
-	py_modules=['ml-toolkit'],
+	py_modules=['mltk'],
 	install_requires=requirements,
 	entry_points={
 		'console_scripts' : [
-			'mltoolkit = mltoolkit:main',
+			'mltk = mltoolkit:main',
 		],
 	}
 )

@@ -2,7 +2,6 @@
 this file contains functions for printing things in a certain format
 """
 # external imports
-from colorama import Fore, Style
 import os
 
 def title(title_str: str, fill_char: str='='):
@@ -36,15 +35,3 @@ def binary_prompt(message: str) -> bool:
 		return True
 	else:
 		return False
-
-def green(msg: str, end='\n'):
-    """
-    prints a string in green text
-    """
-    print(Fore.GREEN + msg + Style.RESET_ALL)
-
-def red(msg: str, end='\n'):
-    """
-    prints a string in red text
-    """
-    print(Fore.RED + msg + Style.RESET_ALL)
