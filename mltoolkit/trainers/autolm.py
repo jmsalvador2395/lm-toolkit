@@ -8,6 +8,7 @@ import datasets
 import tokenizers
 from tqdm import tqdm
 from torch import nn
+from torch.nn import functional as f
 from datasets import Dataset
 from transformers import PreTrainedTokenizerFast
 from tokenizers import (
@@ -74,7 +75,7 @@ class TrainerAutoLM(TrainerBase):
             f'intermediate data and tools set to save to {save_loc}'
         ))
 
-        if not files.path_exists(save_loc):
+        if not files.path_exists(save_loc) or cfg.data['tknzr_from_scratch']:
             print(strings.green(
                 'tokenizer does not exist. training tokenizer ...'
             ))
@@ -82,6 +83,11 @@ class TrainerAutoLM(TrainerBase):
                 vocab_size = cfg.model['vocab_size'],
                 min_frequency = cfg.model['min_freq'],
                 show_progress=True,
+                special_tokens=[
+                    '[PAD]',
+                    '[MASK]',
+                    '[UNK]'
+                ]
             )
             tokenizer = Tokenizer(models.BPE())
             tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
@@ -101,21 +107,13 @@ class TrainerAutoLM(TrainerBase):
             ))
             tokenizer = PreTrainedTokenizerFast(
                 tokenizer_object=tokenizer,
-                unk_token='[UNK]',
-                sep_token='[SEP]',
                 pad_token='[PAD]',
-                cls_token='[CLS]',
-                mask_token='[MASK]',
             )
 
         else:
             tokenizer = PreTrainedTokenizerFast(
                 tokenizer_file=save_loc,
-                unk_token='[UNK]',
-                sep_token='[SEP]',
                 pad_token='[PAD]',
-                cls_token='[CLS]',
-                mask_token='[MASK]',
             )
             print(strings.green(
                 f'loaded tokenizer from {save_loc}'
@@ -140,18 +138,48 @@ class TrainerAutoLM(TrainerBase):
 
     def train_step(self, batch):
         # compute scores and calculate loss
-        inputs = self.tokenizer(
+        tokens = self.tokenizer(
             batch['text'],
+            max_length=512,
             padding='max_length',
             truncation=True,
             return_tensors='pt',
-        )
-        breakpoint()
-        scores = self.model(batch['image'].to(self.dev))
-        labels = batch['label'].to(self.dev)
-        loss = self.loss_fn(scores, labels)
-        accuracy = torch.sum(torch.argmax(scores, dim=-1) == labels)/len(labels)
+        ).to(self.dev)
 
+        lengths = torch.sum(
+            tokens['attention_mask'],
+            dim=-1,
+        )
+        not_empty = torch.where(lengths != 0)
+
+        input_ids = tokens['input_ids'][not_empty].to(self.dev)
+        attn_mask = tokens['attention_mask'][not_empty].to(self.dev)
+        lengths = lengths[not_empty].to(self.dev)
+        R, C = input_ids.shape
+
+        cascade_ids = torch.vstack([
+            input_ids[i][None].repeat(lengths[i]-1, 1)
+            for i in range(len(lengths))
+        ])
+        masks = [
+            f.pad(
+                torch.tril(torch.ones(
+                    (lengths[i]-1, lengths[i]),
+                    dtype=torch.bool,
+                    device=self.dev
+                )),
+                pad=(0, C-lengths[i])
+            )
+            for i in range(len(lengths))
+        ]
+        cascade_masks = torch.vstack(masks)
+        labels = torch.hstack([
+            input_ids[i][1:lengths[i]]
+            for i in range(len(lengths))
+        ])
+
+        breakpoint()
+        
         return loss, {
             'scalar' : {
                 'loss/train' : loss,

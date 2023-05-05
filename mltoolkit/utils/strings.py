@@ -1,5 +1,6 @@
 # external imports
 from colorama import Fore, Style
+from datetime import datetime
 import re
 
 """
@@ -10,7 +11,6 @@ def now() -> str:
 	returns a string formatted as YYYYMMDD-HHmmSS (Year, Month, Day, Hour, Minute, Second in order)
 	"""
 
-	from datetime import datetime
 	return datetime.now().strftime('%Y%m%d-%H%M%S')
 
 def clean_multiline(text: str) -> str:
@@ -25,7 +25,10 @@ def replace_slots(text: str, entries: str) -> str:
     for key, value in entries.items():
         if not isinstance(value, str):
             value = str(value)
-        text = text.replace("{{" + key +"}}", value.replace('"', "'").replace('\n', ""))
+        text = text.replace(
+            "{{" + key +"}}",
+            value.replace('"', "'").replace('\n', "")
+        )
     return text
 
 def remove_tilde(text: str) -> str:

@@ -11,7 +11,7 @@ model :
     embedding_dim : 1024
     mlp_hidden_dim : 512
     transformer_hidden_dim : 512
-    min_freq : 100
+    min_freq : 1
 
 optim :
     lr : .005
@@ -22,8 +22,9 @@ data :
     num_shards : 1
     cache_dir : "{{home}}/.cache/huggingface"
     shuffle : True
-    batch_size : 512
+    batch_size : 128
     num_epochs : 10
     eval_freq : 50
     log_freq : 10
     save_loc : "{{project_root}}/data/intermediate"
+    tknzr_from_scratch : False
