@@ -146,6 +146,8 @@ class TrainerBase:
         num_epochs = cfg.data['num_epochs']
         steps = 0
         total_steps = len(self.ds['train'])*num_epochs
+        max_epoch_digits = len(str(num_epochs))
+        max_step_digits = len(str(total_steps))
         display.title('Begin Training')
         prog_bar = tqdm(
             range(total_steps),
@@ -187,12 +189,9 @@ class TrainerBase:
                     'step' : steps,
                 })
 
-                
-                trn_metrics.update({
-                    'scalar' : {
-                        'loss/train' : loss.detach().cpu().numpy(),
-                        'epoch' : epoch
-                    }
+                trn_metrics.get('scalar', {}).update({
+                    'loss/train' : loss,
+                    'epoch' : epoch
                 })
                 # log training statistics
                 if steps % log_freq == 0 or steps == total_steps-1:

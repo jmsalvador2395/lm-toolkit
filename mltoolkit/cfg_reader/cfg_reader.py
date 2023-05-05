@@ -51,10 +51,10 @@ def load(path_str: str, debug=False):
     return cfg, keywords
 
 def set_debug(cfg, debug=False):
-    debug_dir = f'{files.project_root()}/debug'
-    cfg.general['log_dir'] = debug_dir + '/tensorboard'
-    cfg.model['ckpt_dir'] = debug_dir + '/ckpt'
-    cfg.model['save_loc'] = debug_dir + '/intermediate'
+    if debug:
+        debug_dir = f'{files.project_root()}/debug'
+        cfg.general['log_dir'] = debug_dir + '/tensorboard'
+        cfg.model['ckpt_dir'] = debug_dir + '/ckpt'
 
     return cfg
 

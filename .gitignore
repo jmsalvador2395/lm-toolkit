@@ -3,6 +3,7 @@ tensorboard/
 debug/
 data/wackypedia_lemma/
 data/intermediate/
+checkpoints/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
