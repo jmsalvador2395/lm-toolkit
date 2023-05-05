@@ -2,7 +2,7 @@
 import yaml
 
 # local imports
-from mltoolkit import utils, cfg_reader
+from mltoolkit import utils
 from . import trainers
 
 def train(args):
@@ -10,7 +10,7 @@ def train(args):
     if args.cfg is None:
         config_path = utils.menus.file_explorer(
             'choose a config file in',
-            start_path=utils.files.get_project_root() + '/cfg'
+            start_path=utils.files.project_root() + '/cfg'
         )
 
     # check if the provided config path is valid
@@ -21,8 +21,5 @@ def train(args):
             extra_info='the given path is invalid'
         )
 
-    # load config
-    cfg, keywords = cfg_reader.load(config_path)
-
-    trainer = trainers.select(cfg, keywords)
+    trainer = trainers.select(config_path, debug=args.debug)
     trainer.train()

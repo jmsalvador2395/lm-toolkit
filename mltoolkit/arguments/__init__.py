@@ -22,6 +22,13 @@ def parse():
 		help='config path',
 		default=None,
 	)
+	parser_train.add_argument(
+		'-d',
+		'--debug',
+		help='sets the program to debug mode. moves outputs to special locations',
+        action='store_true',
+		default=False,
+	)
 
 	# parser for the evaluation procedure
 	parser_eval = subparser.add_parser('eval')

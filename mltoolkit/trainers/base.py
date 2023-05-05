@@ -5,7 +5,6 @@ import datasets
 from tqdm import tqdm
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-from random import randint
 import math
 from itertools import product
 import time
@@ -17,49 +16,46 @@ from mltoolkit.utils import (
     display,
     data
 )
+from mltoolkit import cfg_reader
 class TrainerBase:
-    def __init__(self, cfg, keywords):
+    def __init__(self, config_path, debug=False):
+        self.debug = debug
+        self.debug_dir = f'{files.project_root()}/debug'
         self.model = None
-        self.cfg = cfg
-        self.keywords = keywords
+        self.cfg, self.keywords = \
+            cfg_reader.load(config_path, debug=debug)
 
         # set device
-        self.dev = cfg.model.get('device', 'cpu')
+        self.dev = self.cfg.model['device']
 
         # seed the random number generators
-        torch.manual_seed(
-            cfg.general.get(
-                'seed',
-                randint(0, 2**32)
-            )
-        )
-        np.random.seed(
-            cfg.general.get(
-                'seed', 
-                randint(0, 2**32)
-            )
-        )
+        torch.manual_seed(self.cfg.general['seed'])
+        np.random.seed(self.cfg.general['seed'])
         self.rng = np.random.default_rng(
-            seed=cfg.general.get(
-                'seed', 
-                randint(0, 2**32)
-            )
+            self.cfg.general['seed']
         )
 
     def init_optimizer(self):
-        pass
+        self.optim = torch.optim.Adam(
+            self.model.parameters(),
+            lr=self.cfg.optim['lr'],
+            weight_decay=self.cfg.optim['weight_decay']
+        )
 
     def init_loss_fn(self):
         pass
 
-    def prepare_data(self):
+    def prepare_data_and_tools(self):
         pass
 
     def evaluate(self):
         return 0, {}
 
+    def test(self):
+        pass
+
     def train_step(self, batch):
-        return torch.randn(1)[0]
+        return torch.tensor(0), {}
 
     def _log(writer, metrics, step_number):
         if metrics is None:
@@ -110,79 +106,70 @@ class TrainerBase:
         self.init_optimizer()
         self.init_loss_fn()
 
-        # set experiment name
-        experiment_name = f'{self.keywords["timestamp"]}-{cfg.model["name"]}'
-
         # create checkpoint directory
-        ckpt_dir = (
-            cfg.model.get(
-                'ckpt_dir', 
-                f'files.get_project_root()/checkpoints'
-            ).rstrip('/') + \
-            f'/{experiment_name}'
-        )
+        ckpt_dir = cfg.model['ckpt_dir']
         files.create_path(ckpt_dir)
         print(strings.green(
             f'\ncheckpoints set to be saved to {ckpt_dir}'
         ))
 
         # pre-process dataset 
-        print(strings.green('\nPreparing dataset for training...'))
-        self.prepare_data()
+        print(strings.green(
+            '\nPreparing dataset and tools...'
+        ))
+        self.prepare_data_and_tools()
 
         # initialize tensorboard logger and log hyperparameters
-        log_dir = cfg.general.get(
-            'logdir_base',
-            f'{files.get_project_root()}/tensorboard'
-        ).rstrip('/') + \
-        f'/{experiment_name}'
-        cfg.general.update({
-            'log_dir' : log_dir
-        })
-        cfg.general.pop('logdir_base')
         writer = SummaryWriter(
-            log_dir=log_dir
+            log_dir=cfg.general['log_dir']
         )
-        self._log_hparams(experiment_name, writer, cfg)
-        print(strings.green('\nlogging to {log_dir}'))
 
-        return writer, ckpt_dir, log_dir, experiment_name
+        self._log_hparams(cfg.general["experiment_name"], writer, cfg)
+        print(strings.green(
+            f'\ntensorboard initialized. access logs at {cfg.general["log_dir"]}'
+        ))
+
+        return writer, ckpt_dir, cfg.general['log_dir'], cfg.general["experiment_name"]
 
     def train(self):
         cfg = self.cfg
 
         # initialize for training
         (writer, ckpt_dir,
-         log_dir, experiment_name) = self.setup()
+         log_dir, cfg.general["experiment_name"]) = self.setup()
 
         # use these for checkpointing
         best_model_score = -math.inf
         best_model_step = -1
 
         # prepare for training
-        num_epochs = cfg.data.get('num_epochs', 1)
+        num_epochs = cfg.data['num_epochs']
         steps = 0
         total_steps = len(self.ds['train'])*num_epochs
         display.title('Begin Training')
         prog_bar = tqdm(
             range(total_steps),
-            desc=experiment_name
+            desc=cfg.general["experiment_name"]
         )
 
         # break dataset into shards
-        num_shards = cfg.data.get('num_shards', 1)
+        num_shards = cfg.data['num_shards']
         shard_ids = np.arange(num_shards)
-        shuffle = cfg.data.get('shuffle', True)
-        batch_size = cfg.data.get('batch_size', 32)
-        eval_freq = cfg.data.get('eval_freq', 1000)
-        log_freq = cfg.data.get('log_freq', 1000)
+        shuffle = cfg.data['shuffle']
+        batch_size = cfg.data['batch_size']
+        eval_freq = cfg.data['eval_freq']
+        log_freq = cfg.data['log_freq']
+
         if shuffle:
             np.random.shuffle(shard_ids)
 
         for epoch, shard in product(range(num_epochs), shard_ids):
 
             # split get shard and shuffle if specified
-            ds_shard = self.ds['train'].shard(num_shards=num_shards, index=shard)
+            ds_shard = self.ds['train'].shard(
+                num_shards=num_shards,
+                index=shard
+            )
             if shuffle:
                 ds_shard = ds_shard.shuffle(generator=self.rng)
 
@@ -201,14 +188,14 @@ class TrainerBase:
                 })
 
                 
+                trn_metrics.update({
+                    'scalar' : {
+                        'loss/train' : loss.detach().cpu().numpy(),
+                        'epoch' : epoch
+                    }
+                })
                 # log training statistics
                 if steps % log_freq == 0 or steps == total_steps-1:
-                    trn_metrics = {
-                        'scalar' : {
-                            'loss/train' : loss.detach().cpu().numpy(),
-                            'epoch' : epoch
-                        }
-                    }
                     self._log(writer, trn_metrics, steps)
 
                 # log evaluation statistics
@@ -230,5 +217,7 @@ class TrainerBase:
                 steps += 1
 
         prog_bar.close()
+
+        self.test()
         display.title('Finished Training')
 

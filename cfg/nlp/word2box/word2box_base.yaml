@@ -6,15 +6,13 @@ general :
 model :
     name : "word2box"
     embedding_dim : 200
-    checkpoint_path : Null
     vocab_size : 150000
-    ckpt_dir : "{{project_root}}/checkpoints/"
+    ckpt_dir : "{{project_root}}/checkpoints"
     device : "cuda:1"
 
 optim :
     lr : .005
     weight_decay : 0
-
 
 task :
     window_size : 5

@@ -1,5 +1,8 @@
 # Project-specific Cases
 tensorboard/
+debug/
+data/wackypedia_lemma/
+data/intermediate/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -20,18 +20,3 @@ def title(title_str: str, fill_char: str='='):
 
 	# print the title
 	print('\n' + title_str.center(col, fill_char) + '\n')
-
-def binary_prompt(message: str) -> bool:
-	"""
-	used to prompt the user for any yes or no options
-
-	:param message: the message to be displayed before prompting
-
-	:rtype bool: yes or no converted to true or false
-	"""
-
-	choice = input(f'{message} (y/n): ').lower()
-	if choice == 'y' or choice == 'yes':
-		return True
-	else:
-		return False

@@ -11,7 +11,7 @@ from typing import Dict, List, Tuple
 # local imports
 from . import validate
 
-def get_project_root() -> str:
+def project_root() -> str:
     """
     use this to get the root directory of the project
 
@@ -20,7 +20,16 @@ def get_project_root() -> str:
     """
     return str(Path(__file__).parent.parent.parent)
 
-def get_full_path(path_str, check_exist=False) -> str:
+def home() -> str:
+    """
+    returns the home directory
+    
+    :return: the home directory
+    :rtype: str
+    """
+    return str(Path.home())
+
+def full_path(path_str, check_exist=False) -> str:
     """
     converts the input into an absolute path if recognized as a relative path
 
@@ -72,20 +81,17 @@ def split_dir_fname(path_str: str) -> Tuple[str, str]:
     )
 
 
-def homedir() -> str:
-    """
-    returns the home directory
-    
-    :return: the home directory
-    :rtype: str
-    """
-    return str(Path.home())
-
-def create_path(path_str, parents=True, exist_ok=True):
-    Path(path_str).mkdir(
-        parents=parents,
-        exist_ok=exist_ok
-    )
+def create_path(path_str, parents=True, exist_ok=True, is_file=False):
+    if is_file:
+        Path(dirname(path_str)).mkdir(
+            parents=parents,
+            exist_ok=exist_ok
+        )
+    else:
+        Path(path_str).mkdir(
+            parents=parents,
+            exist_ok=exist_ok
+        )
 
 def count_lines(path: str) -> int:
     """
@@ -124,7 +130,7 @@ def load_pkl(path_str: str) -> object:
     
     return src_obj
 
-def valid_path(path_str: str) -> bool:
+def path_exists(path_str: str) -> bool:
     """
     checks if a given path string exists
 

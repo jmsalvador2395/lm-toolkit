@@ -20,31 +20,18 @@ from mltoolkit.utils import (
 
 class TrainerExample(TrainerBase):
     
-    def __init__(self, cfg, keywords):
-        super().__init__(cfg, keywords)
+    def __init__(self, config_path, debug=False):
+        super().__init__(config_path)
 
-        # dummy model
+        # define model
         self.model = torch.nn.Sequential(
             torch.nn.Linear(10, 100),
             torch.nn.ReLU(),
             torch.nn.Linear(100, 10)
         ).to(self.dev)
 
-    def init_optimizer(self):
-        # optimizer
-        self.optim = torch.optim.Adam(
-            self.model.parameters(),
-            lr=self.cfg.optim.get('lr', 1e-3), 
-            weight_decay=self.cfg.optim.get('weight_decay', 0)
-        )
-
-
-    def init_loss_fn(self):
-        self.loss_fn = torch.nn.CrossEntropyLoss()
-
-    def prepare_data(self):
+        # load in datasets
         N, C = (4, 10)
-
         ds_train = Dataset.from_dict({
             'data' : np.random.randn(N, C),
             'labels' : np.random.randint(0, C, N)
@@ -60,11 +47,26 @@ class TrainerExample(TrainerBase):
             'test' : ds_test
         })
 
+    def init_optimizer(self):
+        # optimizer
+        self.optim = torch.optim.Adam(
+            self.model.parameters(),
+            lr=self.cfg.optim['lr'],
+            weight_decay=self.cfg.optim['weight_decay']
+        )
+
+    def init_loss_fn(self):
+        self.loss_fn = torch.nn.CrossEntropyLoss()
+
+    def prepare_data_and_tools(self):
+        # do your dataset mapping here
+        ds = ds.map(lambda sample: sample)
+
+        # set some other tools that you would need here
+        example_var = 50
+
     def evaluate(self):
         return 0, {}
-
-    def val_step(self, batch):
-        pass
 
     def train_step(self, batch):
         # compute scores and calculate loss

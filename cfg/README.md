@@ -1,7 +1,7 @@
 # Overview
-Each directory contains an overview of how to build a config for the corresponding task along with a base config file to build from.
+Each directory contains models for different areas such as NLP, Reinforcement Learning, and Computer Vision
 
 # Available Models
-* [GloVe](./glove)
-* [Word2Box](./word2box)
-* [Word2Vec](./word2vec)
+* [GloVe](./nlp/glove)
+* [Word2Box](./nlp/word2box)
+* [Word2Vec](./nlp/word2vec)

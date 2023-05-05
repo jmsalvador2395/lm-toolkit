@@ -1,18 +1,18 @@
-
 general : 
-    device : "cuda:1"
     seed : 123
-    base_logdir : "{{project_root}}/tensorboard"
+    logdir_base : "{{project_root}}/tensorboard"
     note : "a quick note about this training run. this note will show up in tensorboard."
 
 model :
     name : "glove"
     embedding_dim : 200
-    checkpoint_path : Null
     vocab_size : 150000
-    weight_decay : 0
-    alpha_weight : .0001
     ckpt_dir : "{{project_root}}/checkpoints"
+    device : "cuda:1"
+    alpha_weight : .0001
+
+optim :
+    lr : .005
     weight_decay : 0
 
 task :
@@ -21,9 +21,11 @@ task :
 
 data : 
     num_proc : 20
-    num_shards : 10
+    min_freq : 100
+    num_shards : 1
     cache_dir : "{{home}}/ds_cache"
     shuffle : True
     batch_size : 4096
-    num_epochs : 10
+    num_epochs : 3
     eval_freq : 1000
+    log_freq : 1000
