@@ -4,8 +4,9 @@ this contains the function used to select the appropriate trainer based off the 
 # local imports
 from mltoolkit import cfg_reader
 from .example import TrainerExample
-from .mnist import TrainerMNIST
-from .autolm import TrainerAutoLM
+from .cv.mnist import TrainerMNIST
+from .nlp.autolm import TrainerAutoLM
+from .nlp.word2box import TrainerWord2Box
 
 def select(config_path, debug=False):
     """
@@ -23,7 +24,7 @@ def select(config_path, debug=False):
     cfg, _ = cfg_reader.load(config_path)
     match cfg.model.get('name', None):
         case 'word2box':
-            return TrainerExample(config_path, debug=debug)
+            return TrainerWord2Box(config_path, debug=debug)
         case 'glove':
             return TrainerExample(config_path, debug=debug)
         case 'word2vec':

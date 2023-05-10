@@ -6,9 +6,12 @@ general :
 model :
     name : "word2box"
     embedding_dim : 200
-    vocab_size : 150000
+    trgt_vocab_size : 150000
+    min_freq : 100
     ckpt_dir : "{{project_root}}/checkpoints"
     device : "cuda:1"
+    beta : 1.9678289474987882
+    volume_temp : 0.33243242379830407
 
 optim :
     lr : .005
@@ -21,7 +24,6 @@ task :
 
 data : 
     num_proc : 20
-    min_freq : 100
     num_shards : 1
     cache_dir : "{{home}}/ds_cache"
     shuffle : True

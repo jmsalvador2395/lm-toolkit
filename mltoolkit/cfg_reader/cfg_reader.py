@@ -84,6 +84,17 @@ def set_defaults(cfg, keywords, debug=False):
         ).rstrip('/') + \
         f'/{cfg.general["experiment_name"]}'
     )
+    cfg.model['save_checkpoint'] = cfg.model.get('save_checkpoint', True)
+    cfg.model['keep_higher_eval'] = \
+        cfg.model.get(
+            'keep_higher_eval',
+            True
+        )
+    cfg.model['evaluate'] = \
+        cfg.model.get(
+            'evaluate',
+            True
+        )
 
     # set default optim parameters
     cfg.optim['lr'] = cfg.optim.get('lr', 1e-3)

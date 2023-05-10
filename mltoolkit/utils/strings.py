@@ -1,6 +1,7 @@
 # external imports
 from colorama import Fore, Style
 from datetime import datetime
+from typing import Dict, List, Tuple
 import re
 
 """
@@ -45,3 +46,15 @@ def red(msg: str):
     returns a string in red text
     """
     return Fore.RED + msg + Style.RESET_ALL
+
+def white_space_trail(msg: str) -> List[str]:
+    """
+    split but keep trailing whitespace at the end of each word
+
+    :param msg:
+    :type str:
+
+    :return: list of split tokens
+    :rtype: str
+    """
+    return  re.findall(r'\S+\s*', msg)

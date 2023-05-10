@@ -19,11 +19,17 @@ from mltoolkit.utils import (
 from mltoolkit import cfg_reader
 class TrainerBase:
     def __init__(self, config_path, debug=False):
-        self.debug = debug
-        self.debug_dir = f'{files.project_root()}/debug'
-        self.model = None
         self.cfg, self.keywords = \
             cfg_reader.load(config_path, debug=debug)
+        self.debug = debug
+
+        if debug:
+            self.save_loc = f'{files.project_root()}/debug'
+        elif 'save_loc' in self.cfg.data:
+            self.save_loc = self.cfg.data['save_loc']
+        else:
+            self.save_loc=f'{files.project_root()}/data'
+        self.model = None
 
         # set device
         self.dev = self.cfg.model['device']
@@ -54,6 +60,9 @@ class TrainerBase:
     def test(self):
         pass
 
+    def init_model(self):
+        self.model = torch.nn.Linear(2, 2)
+
     def train_step(self, batch):
         return torch.tensor(0), {}
 
@@ -78,7 +87,7 @@ class TrainerBase:
             '| --------- | ----- |\n'
         for category, params in cfg.items():
             for key, val in sorted(params.items()):
-                table += f'| {category}/**`{key}`** | {val} |\n'
+                table += f'| {category}/**`{key}`** | {str(val)} |\n'
 
         # write table to tensorboard
         writer.add_text('hparams', table)
@@ -103,7 +112,6 @@ class TrainerBase:
     def setup(self):
         cfg = self.cfg
 
-        self.init_optimizer()
         self.init_loss_fn()
 
         # create checkpoint directory
@@ -119,6 +127,10 @@ class TrainerBase:
         ))
         self.prepare_data_and_tools()
 
+        # init model and optimizer
+        self.init_model()
+        self.init_optimizer()
+
         # initialize tensorboard logger and log hyperparameters
         writer = SummaryWriter(
             log_dir=cfg.general['log_dir']
@@ -131,6 +143,12 @@ class TrainerBase:
 
         return writer, ckpt_dir, cfg.general['log_dir'], cfg.general["experiment_name"]
 
+    def _compare_model_scores(self, model_score, best_model_score):
+        if self.cfg.model['keep_higher_eval']:
+            return model_score >= best_model_score
+        else:
+            return model_score <= best_model_score
+
     def train(self):
         cfg = self.cfg
 
@@ -139,7 +157,8 @@ class TrainerBase:
          log_dir, cfg.general["experiment_name"]) = self.setup()
 
         # use these for checkpointing
-        best_model_score = -math.inf
+        best_model_score = -math.inf if cfg.model['keep_higher_eval'] \
+                           else math.inf
         best_model_step = -1
 
         # prepare for training
@@ -176,8 +195,13 @@ class TrainerBase:
                 ds_shard = ds_shard.shuffle(generator=self.rng)
 
             #for batch in DataLoader(ds_shard, batch_size=batch_size, shuffle=shuffle):
+            progress=0
             for i in range(0, len(ds_shard), batch_size):
                 batch = ds_shard[i:i+batch_size]
+                update_step = \
+                    batch_size if i+batch_size < len(ds_shard) \
+                    else len(ds_shard) - i
+                progress += update_step
                
                 loss, trn_metrics = self.train_step(batch)
                 self.optim_step(loss)
@@ -198,11 +222,16 @@ class TrainerBase:
                     self._log(writer, trn_metrics, steps)
 
                 # log evaluation statistics
-                if steps % eval_freq == 0 or steps == total_steps-1:
-                    model_score, eval_metrics = self.evaluate()
+                if (steps % eval_freq == 0 or steps == total_steps-1):
+                    with torch.no_grad():
+                        if cfg.model['evaluate']:
+                            model_score, eval_metrics = self.evaluate()
+                        else:
+                            model_score, eval_metrics = 0, {}
                     self._log(writer, eval_metrics, steps)
 
-                    if model_score > best_model_score:
+                    if self._compare_model_scores(model_score, best_model_score) \
+                    and self.cfg.model['save_checkpoint']:
                         torch.save(self.model, f'{ckpt_dir}/best_model.pth')
                         print(strings.green(
                             f'best model saved at step {steps}'
@@ -212,7 +241,7 @@ class TrainerBase:
 
 
                 # update progress bar and counter
-                prog_bar.update(batch_size)
+                prog_bar.update(update_step)
                 steps += 1
 
         prog_bar.close()

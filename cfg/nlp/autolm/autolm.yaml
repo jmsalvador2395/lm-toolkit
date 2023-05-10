@@ -1,30 +1,40 @@
-general : 
-    seed : 123
-    logdir_base : "{{project_root}}/tensorboard"
-    note : "a quick note about this training run. this note will show up in tensorboard."
+general: 
+    seed: 123
+    logdir_base: "{{project_root}}/tensorboard"
+    note: "a quick note about this training run. this note will show up in tensorboard."
 
-model :
-    name : "autolm"
-    vocab_size : 150000
-    ckpt_dir : "{{project_root}}/checkpoints"
-    device : "cuda:1"
-    embedding_dim : 1024
-    mlp_hidden_dim : 512
-    transformer_hidden_dim : 512
-    min_freq : 1
+model:
+    name: "autolm"
+    trgt_vocab_size: 150000
+    ckpt_dir: "{{project_root}}/checkpoints"
+    embedding_dim: 512
+    mlp_hidden_dim: 512
+    transformer_hidden_dim: 512
+    num_encoder_layers: 6
+    num_decoder_layers: 6
+    min_freq: 1
+    nhead: 8
+    dim_feed_forward: 512
+    device: 
+        - "cuda:0"
+        - "cuda:1"
+        - "cuda:2"
+        - "cuda:3"
+    save_checkpoint: True
+    keep_higher_eval: False
+    evaluate: True
 
-optim :
-    lr : .005
-    weight_decay : 0
+optim:
+    lr: .0008
+    weight_decay: 0
 
-data : 
-    num_proc : 20
-    num_shards : 1
-    cache_dir : "{{home}}/.cache/huggingface"
-    shuffle : True
-    batch_size : 128
-    num_epochs : 10
-    eval_freq : 50
-    log_freq : 10
-    save_loc : "{{project_root}}/data/intermediate"
-    tknzr_from_scratch : False
+data: 
+    num_proc: 20
+    num_shards: 1
+    cache_dir: "{{home}}/.cache/huggingface"
+    shuffle: True
+    batch_size: 16
+    num_epochs: 10
+    eval_freq: 50
+    log_freq: 10
+    tknzr_from_scratch: False

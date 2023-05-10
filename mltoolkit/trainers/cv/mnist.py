@@ -10,7 +10,7 @@ from torch import nn
 from datasets import Dataset
 
 # local imports
-from .base import TrainerBase
+from mltoolkit.trainers.base import TrainerBase
 from mltoolkit.utils import (
     files,
     strings,
@@ -33,6 +33,9 @@ class TrainerMNIST(TrainerBase):
         ).with_format('torch')
         in_size = cfg.model['hidden_dim']
 
+
+    def init_model(self):
+        cfg = self.cfg
         # define model
         self.model = torch.nn.Sequential(
             torch.nn.Flatten(),

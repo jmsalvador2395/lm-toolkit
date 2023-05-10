@@ -178,7 +178,10 @@ def count_files_in(path_str: str, match_str: str=None) -> int:
     validate.path_exists(path_str)
 
     files = os.listdir(path_str)
-    files = [f for f in files if match_str in f]
+    if match_str is not None:
+        files = [f for f in files]
+    else:
+        files = [f for f in files if match_str in f]
 
     return len(files)
 
