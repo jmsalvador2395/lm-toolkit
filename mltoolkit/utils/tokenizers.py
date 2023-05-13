@@ -24,6 +24,7 @@ def fetch_tokenizer(
     batch_size=1024,
     ver='bpe',
     override=False,
+    special_tokens={'pad': '[PAD]'},
 ):
     """
     tries to read in an existing tokenizer and if it doesn't exists, one is created and saved.
@@ -63,11 +64,7 @@ def fetch_tokenizer(
             vocab_size = trgt_vocab_size,
             min_frequency = min_freq,
             show_progress=True,
-            special_tokens=[
-                '[PAD]',
-                '[UNK]',
-                '[NUM]',
-            ]
+            special_tokens=list(special_tokens.values())
         )
         tokenizer = Tokenizer(model)
         tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
@@ -88,15 +85,25 @@ def fetch_tokenizer(
         ))
         tokenizer = PreTrainedTokenizerFast(
             tokenizer_object=tokenizer,
-            pad_token='[PAD]',
-            unk_token='[UNK]',
+            bos_token=special_tokens.get('bos', None),
+            eos_token=special_tokens.get('eos', None),
+            unk_token=special_tokens.get('unk', None),
+            sep_token=special_tokens.get('sep', None),
+            pad_token=special_tokens.get('pad', None),
+            cls_token=special_tokens.get('cls', None),
+            mask_token=special_tokens.get('mask', None),
         )
 
     else:
         tokenizer = PreTrainedTokenizerFast(
             tokenizer_file=path_str,
-            pad_token='[PAD]',
-            unk_token='[UNK]',
+            bos_token=special_tokens.get('bos', None),
+            eos_token=special_tokens.get('eos', None),
+            unk_token=special_tokens.get('unk', None),
+            sep_token=special_tokens.get('sep', None),
+            pad_token=special_tokens.get('pad', None),
+            cls_token=special_tokens.get('cls', None),
+            mask_token=special_tokens.get('mask', None),
         )
         print(strings.green(
             f'loaded tokenizer from {path_str}'

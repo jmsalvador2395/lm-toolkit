@@ -1,5 +1,6 @@
 # Project-specific Cases
 tensorboard/
+tensorboard_archive/
 debug/
 data/wackypedia_lemma/
 data/intermediate/

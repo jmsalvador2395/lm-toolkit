@@ -5,6 +5,9 @@ from torch import nn
 from torch.nn import functional as f
 from typing import List
 
+# local imports
+from mltoolkit.nn_modules import PositionalEncoding
+
 class TransformerEncDec(nn.Module):
     
     def __init__(self, cfg):
@@ -33,6 +36,14 @@ class TransformerEncDec(nn.Module):
             V,
             embedding_dim
         )
+
+        self.enc_pos = PositionalEncoding(
+            embedding_dim,
+        )
+
+        self.dec_pos = PositionalEncoding(
+            embedding_dim,
+        )
         
         self.enc_dec = nn.Transformer(
             embedding_dim,
@@ -47,6 +58,9 @@ class TransformerEncDec(nn.Module):
                 embedding_dim,
                 dim_feed_forward,
             ),
+            nn.BatchNorm1d(
+                embedding_dim,
+            ),
             nn.ReLU(),
             nn.Linear(
                 dim_feed_forward,
@@ -55,10 +69,19 @@ class TransformerEncDec(nn.Module):
         )
 
     def forward(self, input_ids, tgt_ids, input_attn_mask, tgt_attn_mask):
+
+        # get embeddings
         src_emb = self.emb_enc(input_ids)
         tgt_emb = self.emb_dec(tgt_ids)
 
+        # apply positional encodings
+        src_emb = self.enc_pos(src_emb)
+        tgt_emb = self.dec_pos(tgt_emb)
+
+        # feed to transformer
         scores = self.enc_dec(src_emb, tgt_emb, input_attn_mask, tgt_attn_mask)
+
+        # get classification scores
         scores = self.classifier(scores)
 
         return scores

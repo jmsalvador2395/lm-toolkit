@@ -1,0 +1,43 @@
+general: 
+    seed: 577
+    logdir_base: "{{project_root}}/tensorboard"
+    note: "fixed linear layer. added dropout"
+
+model:
+    name: "autolm"
+    trgt_vocab_size: 150000
+    ckpt_dir: "{{project_root}}/checkpoints"
+    seq_len: 512
+    embedding_dim: 1024
+    num_decoder_layers: 6
+    dropout: 0
+    min_freq: 1
+    nhead: 8
+    dim_feed_forward: 512
+    device: 
+        - "cuda:3"
+        - "cuda:0"
+        - "cuda:1"
+        - "cuda:2"
+    save_checkpoint: True
+    keep_higher_eval: False
+    evaluate: True
+
+optim:
+    lr: 2.0e-4
+    weight_decay: 1.0e-6
+    beta1: .9
+    beta2: .97
+    eps: 1.0e-8
+    scheduler_freq: 1000
+
+data: 
+    num_proc: 20
+    num_shards: 1
+    cache_dir: "{{home}}/.cache/huggingface"
+    shuffle: True
+    batch_size: 16
+    num_epochs: 3
+    eval_freq: 300
+    log_freq: 10
+    tknzr_from_scratch: False

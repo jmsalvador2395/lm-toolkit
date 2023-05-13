@@ -40,6 +40,7 @@ class TrainerBase:
         self.rng = np.random.default_rng(
             self.cfg.general['seed']
         )
+        self.scheduler = None
 
     def init_optimizer(self):
         self.optim = torch.optim.Adam(
@@ -225,7 +226,9 @@ class TrainerBase:
                 if (steps % eval_freq == 0 or steps == total_steps-1):
                     with torch.no_grad():
                         if cfg.model['evaluate']:
+                            self.model.eval()
                             model_score, eval_metrics = self.evaluate()
+                            self.model.train()
                         else:
                             model_score, eval_metrics = 0, {}
                     self._log(writer, eval_metrics, steps)
@@ -243,6 +246,7 @@ class TrainerBase:
                 # update progress bar and counter
                 prog_bar.update(update_step)
                 steps += 1
+            # self.scheduler.step()
 
         prog_bar.close()
 
