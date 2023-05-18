@@ -99,6 +99,8 @@ def set_defaults(cfg, keywords, debug=False):
     # set default optim parameters
     cfg.optim['lr'] = float(cfg.optim.get('lr', 1e-3))
     cfg.optim['weight_decay'] = float(cfg.optim.get('weight_decay', 0))
+    cfg.optim['clip_max_norm'] = cfg.optim.get('clip_max_norm', None)
+    cfg.optim['clip_norm_type'] = cfg.optim.get('clip_norm_type', 2.0)
 
     # set default parameters if they don't exist
     cfg.data['num_epochs'] = cfg.data.get('num_epochs', 1)

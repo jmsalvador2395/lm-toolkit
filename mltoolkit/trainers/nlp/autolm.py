@@ -39,6 +39,11 @@ class TrainerAutoLM(TrainerBase):
 
     def init_model(self):
         self.model = AutoDecoder(self.cfg.model).to(self.dev[0])
+        self.model = nn.DataParallel(
+            self.model,
+            device_ids=self.dev,
+            output_device=self.dev[0]
+        )
 
     def init_optimizer(self):
         cfg = self.cfg
@@ -72,8 +77,8 @@ class TrainerAutoLM(TrainerBase):
 
         special_tokens = {
             'pad': '[PAD]',
-            'bos': '[BOS]',
-            'eos': '[EOS]',
+            #'bos': '[BOS]',
+            #'eos': '[EOS]',
             'unk': '[UNK]',
         }
 
@@ -83,12 +88,12 @@ class TrainerAutoLM(TrainerBase):
             trgt_vocab_size=cfg.model['trgt_vocab_size'],
             min_freq=cfg.model['min_freq'],
             override=self.debug,
-            ver='bpe',
+            ver='word_piece',
             special_tokens=special_tokens,
         )
         self.cfg.model['vocab_size'] = self.tokenizer.vocab_size
 
-    def get_model_inputs(self, batch):
+    def prepare_data(self, batch):
         cfg = self.cfg
         seq_len = cfg.model['seq_len']
         # compute scores and calculate loss
@@ -126,9 +131,12 @@ class TrainerAutoLM(TrainerBase):
             batch = self.ds['validation'][i:i+batch_size]
 
             input_ids, labels, attn_mask, tgt_attn_mask = \
-                self.get_model_inputs(batch)
+                self.prepare_data(batch)
 
-            scores = self.model(input_ids, input_ids, attn_mask, attn_mask)
+            scores = self.model(
+                input_ids,
+                attn_mask
+            )
 
             scores = scores[tgt_attn_mask]
             labels = labels[tgt_attn_mask]
@@ -147,9 +155,12 @@ class TrainerAutoLM(TrainerBase):
     def train_step(self, batch):
 
         input_ids, labels, attn_mask, tgt_attn_mask = \
-            self.get_model_inputs(batch)
+            self.prepare_data(batch)
 
-        scores = self.model(input_ids, input_ids, attn_mask, attn_mask)
+        scores = self.model(
+            input_ids, 
+            attn_mask,
+        )
 
         scores = scores[tgt_attn_mask]
         labels = labels[tgt_attn_mask]

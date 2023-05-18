@@ -107,7 +107,18 @@ class TrainerBase:
     def optim_step(self, loss):
         # backward pass and optimizer step, followed by zero_grad()
         loss.backward()
+        # gradient clipping
+        clip_max_norm = self.cfg.optim['clip_max_norm']
+        if clip_max_norm is not None:
+            nn.utils.clip_grad_norm_(
+                self.model.parameters(), 
+                clip_max_norm,
+                norm_type=self.cfg.optim['clip_norm_type'],
+                error_if_nonfinite=False,
+                foreach=True
+            )
         self.optim.step()
+
         self.optim.zero_grad()
 
     def setup(self):
@@ -130,6 +141,13 @@ class TrainerBase:
 
         # init model and optimizer
         self.init_model()
+        print(strings.green('\nprinting model summary ...'))
+        print(self.model)
+        params = self.model.parameters()
+        num_params = sum(p.numel() for p in params if p.requires_grad)
+        print(strings.green(
+            f'\nmodel has {num_params:,} learnable parameters'
+        ))
         self.init_optimizer()
 
         # initialize tensorboard logger and log hyperparameters
@@ -193,7 +211,11 @@ class TrainerBase:
                 index=shard
             )
             if shuffle:
-                ds_shard = ds_shard.shuffle(generator=self.rng)
+                ds_shard = ds_shard.shuffle(
+                    generator=self.rng,
+                    keep_in_memory=True,
+                    load_from_cache_file=False,
+                )
 
             #for batch in DataLoader(ds_shard, batch_size=batch_size, shuffle=shuffle):
             progress=0

@@ -15,21 +15,31 @@ class AutoregressiveTransformerDecoder(nn.Module):
         super(AutoregressiveTransformerDecoder, self).__init__()
 
         # set defaults if they don't exist
-        self.dev = cfg.get('device', 'cpu')
+        self.dev = cfg.get('device', ['cpu'])
         V = cfg['vocab_size']
         embedding_dim = cfg.get('embedding_dim', 512)
         num_decoder_layers = cfg.get('num_decoder_layers', 6)
+        num_hidden_layers = cfg.get('num_hidden_layers', 1)
         nhead = cfg.get('nhead', 8)
         dim_feed_forward = cfg.get('dim_feed_forward', 512)
         seq_len = cfg.get('seq_len', 512)
+        mlp_dropout = cfg.get('mlp_dropout', 0.1)
+        decoder_dropout = cfg.get('decoder_dropout', 0.1)
 
-        if num_decoder_layers % 2 != 0:
-            raise ValueError('transformer_layers should be divisible by 2')
+        if num_decoder_layers % len(self.dev) != 0:
+            raise ValueError('transformer_layers should be divisible by number of devices in list')
+        cutoff = num_decoder_layers // len(self.dev)
+        
+        transformer_devs = []
+        for step in range(num_decoder_layers):
+            transformer_devs.append(
+                self.dev[step//cutoff]
+            )
 
         # embedding layer
         self.emb = nn.Embedding(
             V,
-            embedding_dim
+            embedding_dim,
         )
 
         self.pos = PositionalEncoding(
@@ -37,60 +47,91 @@ class AutoregressiveTransformerDecoder(nn.Module):
         )
 
         decoder_layer = nn.TransformerDecoderLayer(
-            embedding_dim,
-            nhead,
-            dim_feed_forward,
-            batch_first=True,
-        )
-
-        self.decoder1 = nn.TransformerDecoder(
+                embedding_dim,
+                nhead,
+                dim_feed_forward,
+                dropout=decoder_dropout,
+                activation='gelu',
+                batch_first=True,
+            )
+        self.decoder = nn.TransformerDecoder(
             decoder_layer,
             num_decoder_layers,
         )
+        """
+        self.decoder=[]
+        for layer in range(num_decoder_layers):
+            self.decoder.append(
+                nn.TransformerDecoderLayer(
+                    embedding_dim,
+                    nhead,
+                    dim_feed_forward,
+                    dropout=decoder_dropout,
+                    activation='gelu',
+                    batch_first=True,
+                )
+            )
+            step += 1
+        self.decoder = nn.ModuleList(self.decoder)
+        """
 
-        self.classifier = nn.Sequential(
-            nn.Linear(
-                embedding_dim,
-                dim_feed_forward,
-            ),
-            nn.LayerNorm(
-                (seq_len, dim_feed_forward),
-            ),
-            nn.ReLU(),
-            nn.Dropout(p=cfg.get('dropout', .1)),
-            nn.Linear(
-                dim_feed_forward,
-                V,
-            ),
+        self.classifier= []
+        for layer in range(num_hidden_layers):
+            input_size = embedding_dim if layer == 0 else dim_feed_forward
+            self.classifier.append(
+                nn.Sequential(
+                    nn.Linear(
+                        input_size,
+                        dim_feed_forward,
+                    ),
+                    #nn.LayerNorm(
+                        #(dim_feed_forward,),
+                    #),
+                    nn.ReLU(),
+                    nn.Dropout(p=mlp_dropout),
+                )
+            )
+            nn.init.kaiming_uniform_(self.classifier[-1][0].weight)
+        self.classifier = nn.ModuleList(self.classifier)
 
+        self.proj = nn.Linear(
+            dim_feed_forward,
+            V,
         )
 
-    def forward(self, input_ids, tgt_ids, input_attn_mask, tgt_attn_mask):
-
+    def forward(self, input_ids, attn_mask):
+        N, S = input_ids.shape
         # get embeddings
-        emb = self.emb(input_ids)
+        out = self.emb(input_ids)
 
         # apply positional encodings
-        emb = self.pos(emb)
+        out = self.pos(out)
 
+        attn_mask = \
+            torch.triu(torch.ones(S, S, dtype=torch.bool)).to(out.device)
+        attn_mask.fill_diagonal_(False)
+
+        """
         # feed to transformer
-        emb = self.decoder1(
-            emb,
-            emb,
-            input_attn_mask,
-            tgt_attn_mask
-        )
-
+        for step, dec in enumerate(self.decoder):
+            out = dec(
+                out,
+                out,
+                tgt_is_causal=True,
+                memory_is_causal=True,
+            )
         """
-        emb = self.decoder2(
-            emb,
-            emb,
-            input_attn_mask,
-            tgt_attn_mask,
+        out = self.decoder(
+            out,
+            out,
+            attn_mask,
+            attn_mask,
         )
-        """
 
         # get classification scores
-        scores = self.classifier(emb)
+        for cls in self.classifier:
+            out = cls(out)
 
-        return scores
+        out = self.proj(out)
+
+        return out

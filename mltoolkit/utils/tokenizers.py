@@ -41,7 +41,7 @@ def fetch_tokenizer(
 
     path_str += \
             f'/v_{trgt_vocab_size}' + \
-            f'/min_freq_{min_freq}/tokenizer.json'
+            f'/min_freq_{min_freq}/{ver}/tokenizer.json'
     if not files.path_exists(path_str) or override:
         if override:
             print(strings.green(
@@ -57,6 +57,9 @@ def fetch_tokenizer(
         elif ver == 'word_level':
             model = tokenizers.models.WordLevel()
             trainer = tokenizers.trainers.WordLevelTrainer
+        elif ver == 'word_piece':
+            model = tokenizers.models.WordPiece()
+            trainer = tokenizers.trainers.WordPieceTrainer
         else:
             raise ValueError('selected tokenizer is not implemented')
 
