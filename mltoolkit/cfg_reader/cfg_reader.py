@@ -95,6 +95,11 @@ def set_defaults(cfg, keywords, debug=False):
             'evaluate',
             True
         )
+    cfg.model['load_checkpoint'] = \
+        cfg.model.get(
+            'load_checkpoint',
+            None
+        )
 
     # set default optim parameters
     cfg.optim['lr'] = float(cfg.optim.get('lr', 1e-3))

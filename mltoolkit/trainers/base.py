@@ -14,7 +14,8 @@ from mltoolkit.utils import (
     files,
     strings,
     display,
-    data
+    data,
+    validate
 )
 from mltoolkit import cfg_reader
 class TrainerBase:
@@ -140,7 +141,16 @@ class TrainerBase:
         self.prepare_data_and_tools()
 
         # init model and optimizer
-        self.init_model()
+        if cfg.model['load_checkpoint'] is None:
+            self.init_model()
+        else:
+            validate.path_exists(
+                cfg.model['load_checkpoint'],
+                extra_info=f'given checkpoint path \'{cfg.model["load_checkpoint"]}\' is invalid'
+            )
+            print(strings.green(f'loading checkpoint from: {cfg.model["load_checkpoint"]}'))
+            self.model = torch.load(cfg.model['load_checkpoint'])
+
         print(strings.green('\nprinting model summary ...'))
         print(self.model)
         params = self.model.parameters()
@@ -178,7 +188,7 @@ class TrainerBase:
         # use these for checkpointing
         best_model_score = -math.inf if cfg.model['keep_higher_eval'] \
                            else math.inf
-        best_model_step = -1
+        last_ckpt = 0
 
         # prepare for training
         num_epochs = cfg.data['num_epochs']
@@ -203,6 +213,7 @@ class TrainerBase:
         if shuffle:
             np.random.shuffle(shard_ids)
 
+        # make tracker to track the last checkpoint step
         for epoch, shard in product(range(num_epochs), shard_ids):
 
             # split get shard and shuffle if specified
@@ -234,6 +245,7 @@ class TrainerBase:
                     'loss' : f'{loss.detach().cpu().numpy():.02f}',
                     'epoch' : epoch,
                     'step' : steps,
+                    'last_ckpt': last_ckpt
                 })
 
                 trn_metrics.get('scalar', {}).update({
@@ -258,10 +270,9 @@ class TrainerBase:
                     if self._compare_model_scores(model_score, best_model_score) \
                     and self.cfg.model['save_checkpoint']:
                         torch.save(self.model, f'{ckpt_dir}/best_model.pth')
-                        print(strings.green(
-                            f'best model saved at step {steps}'
-                        ))
-                        best_model_step = steps
+                        
+                        # update trackers
+                        last_ckpt = steps
                         best_model_score = model_score
 
 

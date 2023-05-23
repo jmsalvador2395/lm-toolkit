@@ -22,10 +22,11 @@ model:
     save_checkpoint: True
     keep_higher_eval: False
     evaluate: True
+    load_checkpoint: "/data/john/projects/mltoolkit/checkpoints/20230519-064232-autolm/best_model.pth"
 
 optim:
-    #lr: 8.0e-6
-    lr: 3.0e-5
+    #lr: 3.0e-5
+    lr: 7.0e-7
     weight_decay: 5.0e-6
     beta1: .9
     beta2: .999
@@ -38,8 +39,8 @@ data:
     num_shards: 1
     cache_dir: "{{home}}/.cache/huggingface"
     shuffle: True
-    batch_size: 24
-    num_epochs: 3
+    batch_size: 20
+    num_epochs: 10
     eval_freq: 300
     log_freq: 10
     tknzr_from_scratch: False
