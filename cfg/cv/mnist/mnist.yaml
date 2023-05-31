@@ -2,6 +2,7 @@ general :
     seed : 125
     logdir_base : "{{project_root}}/tensorboard"
     note : "a quick note about this training run. this note will show up in tensorboard."
+    load_checkpoint: null
 
 model :
     name : "mnist"
@@ -12,7 +13,6 @@ model :
     dropout: 0.10
     num_classes: 10
     keep_higher_eval: True
-    load_checkpoint: null
 
 optim :
     # optimizer
@@ -21,7 +21,7 @@ optim :
 
     # optimizer scheduler
     sched_step_size: 2
-    sched_gamma: 0.75
+    sched_gamma: 0.6
 
     # swa scheduler
     swa_begin: 25

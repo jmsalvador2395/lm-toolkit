@@ -153,11 +153,11 @@ class TrainerBase:
         display.done(end='\n\n')
 
         # load chackpoint if specified
-        if cfg.checkpoint['load_checkpoint'] is not None:
+        if cfg.general['load_checkpoint'] is not None:
             validate.path_exists(cfg.general['load_checkpoint'])
             display.in_progress(f'loading checkpoint from: {cfg.general["load_checkpoint"]}')
             
-            checkpoint = torch.load(cfg.general['load_checkpoint']
+            checkpoint = torch.load(cfg.general['load_checkpoint'])
 
             display.done('\n\n')
 
