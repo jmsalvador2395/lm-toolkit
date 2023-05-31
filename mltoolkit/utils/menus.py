@@ -24,12 +24,17 @@ def file_explorer(prompt, start_path=None):
             show_shortcut_hints=True,
             show_shortcut_hints_in_status_bar=False,
         )
-        choice = menu.show()
 
-        # exits if the user quit the menu
-        if choice is None:
-            if binary_prompt('exit?'):
-                sys.exit()
+        # loop until exit or choice has been made
+        while True:
+            choice = menu.show()
+
+            # exits if the user quit the menu
+            if choice is None:
+                if binary_prompt('exit?'):
+                    sys.exit()
+            else:
+                break
 
         fname = directory[choice]
         if fname == '../':
@@ -52,12 +57,12 @@ def binary_prompt(message: str, default_no: bool=True) -> bool:
     """
     used to prompt the user for any yes or no options
 
-    :param message: the message to be displayed before prompting
-    :type message: str
+    Input
+        message[str]: the message to be displayed before prompting
+        default_no[bool]: sets the default action. if default_no then prompt returns true unles 'n' or  'no' is specified
 
-    :param default_no: sets the default action. if default_no then prompt returns true unles 'n' or  'no' is specified
-
-    :rtype bool: yes or no converted to true or false
+    Return
+        bool: yes or no converted to true or false
     """
 
     choice = input(f'{message} (y/n): ').lower()

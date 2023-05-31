@@ -4,6 +4,8 @@ tensorboard_archive/
 debug/
 data/wackypedia_lemma/
 data/intermediate/
+data/all_sides/
+data/pretrained_models/
 checkpoints/
 .vscode
 

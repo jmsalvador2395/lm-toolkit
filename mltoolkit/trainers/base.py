@@ -1,74 +1,71 @@
 # external imports
+import math
+import time
 import torch
 import numpy as np
-import datasets
+import random
 from tqdm import tqdm
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-import math
+from torch.optim import swa_utils
 from itertools import product
-import time
+from datasets import Dataset
 
 # local imports
 from mltoolkit.utils import (
     files,
     strings,
     display,
-    data,
     validate
 )
 from mltoolkit import cfg_reader
+
 class TrainerBase:
     def __init__(self, config_path, debug=False):
         self.cfg, self.keywords = \
             cfg_reader.load(config_path, debug=debug)
         self.debug = debug
 
+        # set save location for logs
         if debug:
             self.save_loc = f'{files.project_root()}/debug'
         elif 'save_loc' in self.cfg.data:
             self.save_loc = self.cfg.data['save_loc']
         else:
             self.save_loc=f'{files.project_root()}/data'
-        self.model = None
 
         # set device
         self.dev = self.cfg.model['device']
 
         # seed the random number generators
-        torch.manual_seed(self.cfg.general['seed'])
-        np.random.seed(self.cfg.general['seed'])
-        self.rng = np.random.default_rng(
-            self.cfg.general['seed']
-        )
-        self.scheduler = None
+        seed = self.cfg.general['seed']
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        self.rng = np.random.default_rng(seed)
 
     def init_optimizer(self):
-        self.optim = torch.optim.Adam(
-            self.model.parameters(),
-            lr=self.cfg.optim['lr'],
-            weight_decay=self.cfg.optim['weight_decay']
-        )
+        pass
 
     def init_loss_fn(self):
         pass
 
-    def prepare_data_and_tools(self):
-        pass
-
-    def evaluate(self):
-        return 0, {}
-
-    def test(self):
+    def init_data_and_misc(self):
         pass
 
     def init_model(self):
-        self.model = torch.nn.Linear(2, 2)
+        pass
 
-    def train_step(self, batch):
-        return torch.tensor(0), {}
+    def train_step(self, model, batch):
+        pass
 
-    def _log(writer, metrics, step_number):
+    def eval_step(self, model, batch):
+        pass
+
+    def on_eval_end(self, metric_list):
+        pass
+
+    def _log(self, writer, metrics, step_number):
         if metrics is None:
             return
         if 'scalar' in metrics:
@@ -94,20 +91,11 @@ class TrainerBase:
         # write table to tensorboard
         writer.add_text('hparams', table)
 
-    def _log(self, writer, metrics, step_number):
-        if metrics is None:
-            return
-        if 'scalar' in metrics:
-            for metric in metrics['scalar'].keys():
-                writer.add_scalar(
-                    metric,
-                    metrics['scalar'][metric],
-                    step_number
-                )
-
     def optim_step(self, loss):
+
         # backward pass and optimizer step, followed by zero_grad()
         loss.backward()
+
         # gradient clipping
         clip_max_norm = self.cfg.optim['clip_max_norm']
         if clip_max_norm is not None:
@@ -118,171 +106,443 @@ class TrainerBase:
                 error_if_nonfinite=False,
                 foreach=True
             )
-        self.optim.step()
-
-        self.optim.zero_grad()
+        
+        # optimize and reset gradients
+        self.optimizer.step()
+        self.optimizer.zero_grad()
 
     def setup(self):
+
         cfg = self.cfg
+        display.title('Setting Up Environment')
 
-        self.init_loss_fn()
+        if self.debug:
+            display.note('running in debug mode', end='\n\n')
 
-        # create checkpoint directory
+        # initialize primary variables. these will be assigned as we run through the setup process
+        self.train_loader = None
+        self.val_loader = None
+        self.test_loader = None
+        self.model = None
+        self.optimizer = None
+        self.scheduler = None
+        self.loss_fn = None
+        checkpoint = None # this will be used for checkpointing logic
+
+        """ loss function section """
+
+        # define loss_fn
+        display.in_progress('setting up loss function')
+        self.loss_fn = self.init_loss_fn()
+
+        # check if loss_fn is assigned
+        validate.is_assigned(self.loss_fn, 'self.loss_fn')
+        display.done(end='\n\n')
+
+        """ end loss function section """
+
+        """ checkpointing section """
+
+        display.in_progress('setting up checkpoint directory ...')
+
+        # create checkpoint save directory
         ckpt_dir = cfg.model['ckpt_dir']
         files.create_path(ckpt_dir)
-        print(strings.green(
-            f'\ncheckpoints set to be saved to {ckpt_dir}'
-        ))
 
+        display.note(f'checkpoints set to be saved to {ckpt_dir}')
+        display.done(end='\n\n')
+
+        # load chackpoint if specified
+        if cfg.checkpoint['load_checkpoint'] is not None:
+            validate.path_exists(cfg.general['load_checkpoint'])
+            display.in_progress(f'loading checkpoint from: {cfg.general["load_checkpoint"]}')
+            
+            checkpoint = torch.load(cfg.general['load_checkpoint']
+
+            display.done('\n\n')
+
+
+        """ end checkpointing section """
+
+        """ dataset section """
         # pre-process dataset 
-        print(strings.green(
-            '\nPreparing dataset and tools...'
-        ))
-        self.prepare_data_and_tools()
+        display.in_progress('preparing dataset and tools ...')
 
-        # init model and optimizer
-        if cfg.model['load_checkpoint'] is None:
-            self.init_model()
-        else:
-            validate.path_exists(
-                cfg.model['load_checkpoint'],
-                extra_info=f'given checkpoint path \'{cfg.model["load_checkpoint"]}\' is invalid'
+        self.train_loader, self.val_loader, self.test_loader = \
+            self.init_data_and_misc()
+
+        # check if variables have been defined
+        validate.is_assigned(self.train_loader, 'self.train_loader')
+        validate.is_assigned(self.val_loader, 'self.val_loader')
+        if cfg.data['using_test_loader']:
+            validate.is_assigned(
+                self.test_loader,
+                'self.test_loader',
+                extra_info='if you do not intend to assign anything to it, set config -> data -> using_test_loader to False'
             )
-            print(strings.green(f'loading checkpoint from: {cfg.model["load_checkpoint"]}'))
-            self.model = torch.load(cfg.model['load_checkpoint'])
+        display.done(end='\n\n')
 
-        print(strings.green('\nprinting model summary ...'))
+        """ end dataset section """
+
+        """ model section """
+
+        # init model 
+        self.model = self.init_model()
+        validate.is_assigned(self.model, 'self.model')
+        if checkpoint is not None:
+            self.model.load_state_dict(checkpoint['model'])
+            display.note('loaded model weights from checkpoint')
+
+        display.in_progress('printing model summary ...')
         print(self.model)
-        params = self.model.parameters()
-        num_params = sum(p.numel() for p in params if p.requires_grad)
-        print(strings.green(
-            f'\nmodel has {num_params:,} learnable parameters'
-        ))
-        self.init_optimizer()
 
+        # count and display learnable parameters
+        params = self.model.parameters()
+        learnable_params = sum(p.numel() for p in params if p.requires_grad)
+        unlearnable_params = sum(p.numel() for p in params if not p.requires_grad)
+        display.note(
+            f'model has {learnable_params:,} learnable parameters and {unlearnable_params:,} unlearnable parameters'
+        )
+        display.done(end='\n\n')
+
+        """ end model section """
+
+        """ optimizer section """
+
+        # initialize optimizer and throw errors if self.optim is not initialized
+        display.in_progress('initializing optimizer and lr scheduler ...')
+        self.optimizer, self.scheduler = self.init_optimizer(self.model)
+        if checkpoint is not None:
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+            self.scheduler.load_state_dict(checkpoint['scheduler'])
+
+        validate.is_assigned(self.optimizer, 'self.optimizer')
+        validate.is_assigned(self.scheduler, 'self.scheduler')
+        display.done(end='\n\n')
+
+        """ end optimizer section """
+
+        """ stochastic weight averaging section """
+        display.in_progress('setting up stochastic weight averaging (SWA) ...')
+
+        # define swa model
+        self.swa_model = swa_utils.AveragedModel(self.model)
+
+        # define swa scheduler
+        anneal_strategy = 'linear' if cfg.optim['swa_strat_is_linear'] else 'cos'
+        self.swa_scheduler = swa_utils.SWALR(
+            self.optimizer,
+            anneal_strategy=anneal_strategy,
+            anneal_epochs=cfg.optim['swa_anneal_epochs'],
+            swa_lr=cfg.optim['swa_lr'],
+        )
+        display.note(
+            f'SWA scheduler is using the \'{anneal_strategy}\' strategy. '
+            + 'you can toggle this option by setting the \'swa_strat_is_linear\' variable to either True or False'
+        )
+
+        # set swa beginning
+        self.swa_begin = cfg.optim['swa_begin']
+
+        # convert negative swa_begin to actual epoch number
+        if self.swa_begin < 0:
+            self.swa_begin += cfg.data['num_epochs']
+        display.note(
+            f'SWA is set to begin at epoch {self.swa_begin}'
+        )
+
+        if self.swa_begin < 0 or self.swa_begin >= cfg.data['num_epochs']:
+            display.error(
+                f'variable \'swa_begin\' is computed to {self.swa_begin} and does not fall into a valid epoch number. ' 
+                + f'valid range is: 0 <= swa_begin < {cfg.data["num_epochs"]} for this dataset'
+            )
+            raise ValueError()
+
+        self.swa_bn_update_steps = cfg.optim['swa_bn_update_steps']
+        if self.swa_bn_update_steps == 'all':
+            self.swa_bn_update_steps = len(self.train_loader)
+        
+        # set swa batchnorm update steps
+        if self.swa_bn_update_steps < 0 or self.swa_bn_update_steps > len(self.train_loader):
+            display.error(
+                f'variable \'swa_bn_update_steps\' is set to {self.swa_bn_update_steps} and is not in a valid range. '
+                + f'valid range is 0 <= swa_bn_update_steps <= {len(self.train_loader)} for this dataset'
+            )
+        display.note(
+            f'SWA is set to update batchnorm statistics for {self.swa_bn_update_steps} training steps. '
+            + 'If your model does not use batchnorm, you can disable this procedure by setting swa_bn_update_steps to 0'
+        )
+
+        display.done(end='\n\n')
+
+
+        """ end stochastic weight averaging section """
+
+        """ tensorboard section """
         # initialize tensorboard logger and log hyperparameters
+
+        display.in_progress('initializing tensorboard logging ...')
         writer = SummaryWriter(
             log_dir=cfg.general['log_dir']
         )
-
         self._log_hparams(cfg.general["experiment_name"], writer, cfg)
-        print(strings.green(
-            f'\ntensorboard initialized. access logs at {cfg.general["log_dir"]}'
-        ))
+        display.note(
+            f'tensorboard writer initialized. access logs at {cfg.general["log_dir"]}'
+        )
+        display.done(end='\n\n')
+
+        """ end tensorboard section """
+
+        display.title('Finished Setup')
 
         return writer, ckpt_dir, cfg.general['log_dir'], cfg.general["experiment_name"]
 
-    def _compare_model_scores(self, model_score, best_model_score):
+    def _compare_scores(self, model_score, best_model_score):
+        """
+        compares evaluation scores and makes decision to checkpoint based based on user config
+        """
         if self.cfg.model['keep_higher_eval']:
             return model_score >= best_model_score
         else:
             return model_score <= best_model_score
 
+    def evaluation_procedure(self, use_test_loader=False, use_swa_model=False, cr=False):
+        """
+        applies no_grad() and model.eval() and then evaluates
+        """
+        with torch.no_grad():
+            self.model.eval()
+            self.swa_model.eval()
+
+            score, aggregate_metrics = self.evaluate(
+                use_test_loader=use_test_loader,
+                use_swa_model=use_swa_model,
+                cr=cr
+            )
+
+            self.model.train()
+            self.swa_model.train()
+        return score, aggregate_metrics
+
+    def evaluate(self, use_test_loader=False, use_swa_model=False, cr=False):
+        """
+        this function contains the evaluation loop
+        """
+
+        # set model
+        model = self.swa_model if use_swa_model else self.model
+
+        metric_list = []
+        dl = self.test_loader if use_test_loader else self.val_loader
+
+        for batch in tqdm(dl, total=len(dl), desc='validating', leave=False):
+            metric_list.append(self.eval_step(model, batch))
+        if cr:
+            print('\r')
+
+        metric_list = Dataset.from_list(metric_list)
+        score, aggregate_metrics = self.on_eval_end(metric_list)
+            
+        return score, aggregate_metrics
+
     def train(self):
+
         cfg = self.cfg
 
-        # initialize for training
-        (writer, ckpt_dir,
-         log_dir, cfg.general["experiment_name"]) = self.setup()
+        """ setup environment """
 
-        # use these for checkpointing
-        best_model_score = -math.inf if cfg.model['keep_higher_eval'] \
-                           else math.inf
+        # run through setup of optimizer, model, dataset, tensorboard logger, and checkpoint directory
+        (
+            writer,
+            ckpt_dir,
+            log_dir,
+            cfg.general["experiment_name"],
+        ) = self.setup()
+
+        # initialize checkpointing-related variables
+        best_model_score = \
+            -math.inf if cfg.model['keep_higher_eval'] else math.inf
         last_ckpt = 0
 
-        # prepare for training
+        # initialize variables related to training progress
         num_epochs = cfg.data['num_epochs']
         steps = 0
-        total_steps = len(self.ds['train'])*num_epochs
+        total_steps = len(self.train_loader)*num_epochs
+        eval_freq = cfg.data['eval_freq']
+        log_freq = cfg.data['log_freq']
+        swa_active = False
+        swa_step = None
+
+        # initialize variables for formatting and 
         max_epoch_digits = len(str(num_epochs))
         max_step_digits = len(str(total_steps))
+
+        """ end environment setup """
+
+        """ begin training section """
+
+        # initialize progress bar
         display.title('Begin Training')
         prog_bar = tqdm(
             range(total_steps),
             desc=cfg.general["experiment_name"]
         )
 
-        # break dataset into shards
-        num_shards = cfg.data['num_shards']
-        shard_ids = np.arange(num_shards)
-        shuffle = cfg.data['shuffle']
-        batch_size = cfg.data['batch_size']
-        eval_freq = cfg.data['eval_freq']
-        log_freq = cfg.data['log_freq']
+        # enter training loop
+        for epoch in range(num_epochs):
+            for batch in self.train_loader:
 
-        if shuffle:
-            np.random.shuffle(shard_ids)
+                # compute loss and collect metrics
+                loss, trn_metrics = self.train_step(self.model, batch)
 
-        # make tracker to track the last checkpoint step
-        for epoch, shard in product(range(num_epochs), shard_ids):
-
-            # split get shard and shuffle if specified
-            ds_shard = self.ds['train'].shard(
-                num_shards=num_shards,
-                index=shard
-            )
-            if shuffle:
-                ds_shard = ds_shard.shuffle(
-                    generator=self.rng,
-                    keep_in_memory=True,
-                    load_from_cache_file=False,
-                )
-
-            #for batch in DataLoader(ds_shard, batch_size=batch_size, shuffle=shuffle):
-            progress=0
-            for i in range(0, len(ds_shard), batch_size):
-                batch = ds_shard[i:i+batch_size]
-                update_step = \
-                    batch_size if i+batch_size < len(ds_shard) \
-                    else len(ds_shard) - i
-                progress += update_step
-               
-                loss, trn_metrics = self.train_step(batch)
+                # perform optimization step
                 self.optim_step(loss)
 
-                # update tracked parameters
+                # update metrics on progress bar
                 prog_bar.set_postfix({
-                    'loss' : f'{loss.detach().cpu().numpy():.02f}',
-                    'epoch' : epoch,
-                    'step' : steps,
-                    'last_ckpt': last_ckpt
+                    'epoch': epoch,
+                    'step': steps,
+                    'loss': f'{loss.detach().cpu().numpy():.02f}',
+                    'swa_active_step': swa_step,
+                    'ckpt_step': last_ckpt,
                 })
 
+                # log training metrics
                 trn_metrics.get('scalar', {}).update({
                     'loss/train' : loss,
-                    'epoch' : epoch
+                    'vars/epoch' : epoch,
+                    'vars/lr': \
+                        self.scheduler.get_last_lr()[-1]
+                        if not swa_active
+                        else self.swa_scheduler.get_last_lr()[-1],
                 })
-                # log training statistics
-                if steps % log_freq == 0 or steps == total_steps-1:
+
+                if steps % log_freq == 0:
                     self._log(writer, trn_metrics, steps)
 
                 # log evaluation statistics
-                if (steps % eval_freq == 0 or steps == total_steps-1):
-                    with torch.no_grad():
-                        if cfg.model['evaluate']:
-                            self.model.eval()
-                            model_score, eval_metrics = self.evaluate()
-                            self.model.train()
-                        else:
-                            model_score, eval_metrics = 0, {}
+                if (steps % eval_freq) == 0:
+
+                    model_score, eval_metrics = self.evaluation_procedure()
                     self._log(writer, eval_metrics, steps)
 
-                    if self._compare_model_scores(model_score, best_model_score) \
-                    and self.cfg.model['save_checkpoint']:
-                        torch.save(self.model, f'{ckpt_dir}/best_model.pth')
+                    # save model state dictionary
+                    if self._compare_scores(model_score, best_model_score):
+                        torch.save(self.model.state_dict(), f'{ckpt_dir}/best_model.pt')
                         
                         # update trackers
                         last_ckpt = steps
                         best_model_score = model_score
 
-
-                # update progress bar and counter
-                prog_bar.update(update_step)
+                # update progress bar and increment step counter
+                prog_bar.update()
                 steps += 1
-            # self.scheduler.step()
+
+            """ post-epoch procedure """
+
+            # save checkpoint
+            if not swa_active:
+                torch.save(
+                    {
+                        'model': self.model,
+                        'optimizer': self.optimizer,
+                        'scheduler': self.scheduler,
+                        'epoch': epoch
+                    },
+                    f'{ckpt_dir}/checkpoint.pt'
+                )
+
+            # check to use regular scheduler or swa scheduler
+            if epoch >= self.swa_begin:
+
+                # set swa flags
+                if not swa_active:
+                    swa_active = True
+                    swa_step = steps
+
+                # perform swa updates
+                self.swa_model.update_parameters(self.model)
+                self.swa_scheduler.step()
+
+            else:
+                # apply scheduler step for lr adjustment
+                self.scheduler.step()
+
+            """ end post-epoch procedure """
 
         prog_bar.close()
-
-        self.test()
         display.title('Finished Training')
+
+        """ end training section """
+        
+        display.title('Begin Final Evaluations')
+        """ update batchnorm statistics for swa model """
+
+        if self.swa_bn_update_steps > 0:
+            display.in_progress('updating batchnorm statistics on swa model')
+
+            for count, batch in tqdm(
+                enumerate(self.train_loader),
+                total=self.swa_bn_update_steps,
+                desc='updating batchnorm statistics'
+            ):
+
+                if count == self.swa_bn_update_steps:
+                    break
+
+                self.train_step(self.model, batch)
+            print('\r')
+            display.done(end='\n\n')
+
+        """ end batchnorm statistics update """
+
+        """ do final evaluation with normal model and then swa model"""
+
+        # do evaluation using normal model
+        display.in_progress('evaluating non-swa model')
+        model_score, eval_metrics = self.evaluation_procedure(cr=True)
+
+        save_model = False
+        if self._compare_scores(model_score, best_model_score):
+            torch.save(self.model.state_dict(), f'{ckpt_dir}/best_model.pth')
+            best_model_score = model_score
+
+            display.note('non-swa model saved')
+        display.done(end='\n\n')
+
+        # do evaluation using swa model
+        display.in_progress('evaluating swa model')
+        swa_model_score, swa_eval_metrics = self.evaluation_procedure(
+            use_swa_model=True,
+            cr=True
+        )
+        if self._compare_scores(swa_model_score, best_model_score):
+            # overwrite metrics
+            model_score, eval_metrics = swa_model_score, swa_eval_metrics
+
+            # save model
+            torch.save(self.swa_model.state_dict(), f'{ckpt_dir}/best_model.pth')
+            best_model_score = model_score
+
+            display.note('swa model saved')
+
+        # log last metrics and end 
+        self._log(writer, eval_metrics, steps)
+        display.done(end='\n\n')
+
+        """ end final evaluation """
+
+        """ test set evaluation """
+        # evaluate on the test set
+        if cfg.data['using_test_loader']:
+            display.in_progress('evaluating best model on test set ...')
+            model_score, eval_metrics = self.evaluation_procedure(
+                use_test_loader=True,
+                cr=True
+            )
+            display.done(end='\n\n')
+
+        """ end test set evaluation """
+        
+        display.title('End Final Evaluations')
 

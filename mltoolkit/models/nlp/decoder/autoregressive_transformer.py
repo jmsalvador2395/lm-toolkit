@@ -58,22 +58,6 @@ class AutoregressiveTransformerDecoder(nn.Module):
             decoder_layer,
             num_decoder_layers,
         )
-        """
-        self.decoder=[]
-        for layer in range(num_decoder_layers):
-            self.decoder.append(
-                nn.TransformerDecoderLayer(
-                    embedding_dim,
-                    nhead,
-                    dim_feed_forward,
-                    dropout=decoder_dropout,
-                    activation='gelu',
-                    batch_first=True,
-                )
-            )
-            step += 1
-        self.decoder = nn.ModuleList(self.decoder)
-        """
 
         self.classifier= []
         for layer in range(num_hidden_layers):

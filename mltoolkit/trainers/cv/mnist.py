@@ -8,6 +8,7 @@ import datasets
 from tqdm import tqdm
 from torch import nn
 from datasets import Dataset
+from torch.utils.data import DataLoader
 
 # local imports
 from mltoolkit.trainers.base import TrainerBase
@@ -15,7 +16,6 @@ from mltoolkit.utils import (
     files,
     strings,
     display,
-    data
 )
 
 class TrainerMNIST(TrainerBase):
@@ -23,76 +23,123 @@ class TrainerMNIST(TrainerBase):
     def __init__(self, config_path, debug=False):
         super().__init__(config_path, debug)
 
-        self.C = 10
+    def init_loss_fn(self):
+        return torch.nn.CrossEntropyLoss()
+
+    def init_data_and_misc(self):
+
         cfg = self.cfg
 
         # load mnist dataset
-        self. ds = datasets.load_dataset(
+        self.ds = datasets.load_dataset(
             'mnist',
             cache_dir=cfg.data['cache_dir']
         ).with_format('torch')
         in_size = cfg.model['hidden_dim']
 
+        # preprocess
+        def normalize(batch):
+            batch.update({
+                'image' : batch['image'].to(torch.float32)/255.
+            })
+            return batch
+
+        ds = self.ds.map(
+            normalize,
+            batched=True,
+            batch_size=1000,
+            num_proc=cfg.data['num_proc'],
+        )
+
+        train_loader = DataLoader(
+            ds['train'],
+            shuffle=cfg.data['shuffle'],
+            batch_size=cfg.data['batch_size'],
+        )
+
+        val_loader = DataLoader(
+            ds['test'],
+            shuffle=cfg.data['shuffle'],
+            batch_size=cfg.data['batch_size'],
+        )
+
+        return train_loader, val_loader, None
 
     def init_model(self):
         cfg = self.cfg
         # define model
-        self.model = torch.nn.Sequential(
+        model = torch.nn.Sequential(
             torch.nn.Flatten(),
             torch.nn.Linear(
                 cfg.model['in_size'], 
                 cfg.model['hidden_dim']
             ),
+            torch.nn.BatchNorm1d(cfg.model['hidden_dim']),
             torch.nn.ReLU(),
+            torch.nn.Dropout(p=cfg.model['dropout']),
             torch.nn.Linear(
                 cfg.model['hidden_dim'],
-                self.C
+                cfg.model['num_classes'],
             )
         ).to(self.dev)
 
-    def init_optimizer(self):
+        return model
+
+    def init_optimizer(self, model):
+
+        cfg = self.cfg
+
         # optimizer
-        self.optim = torch.optim.Adam(
-            self.model.parameters(),
+        optimizer = torch.optim.Adam(
+            model.parameters(),
             lr=self.cfg.optim['lr'],
             weight_decay=self.cfg.optim['weight_decay']
         )
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer,
+            cfg.optim['sched_step_size'],
+            gamma=cfg.optim['sched_gamma'],
+        )
+        
+        return optimizer, scheduler
 
-    def init_loss_fn(self):
-        self.loss_fn = torch.nn.CrossEntropyLoss()
+    def step(self, model, batch, mode='train'):
 
-    def prepare_data_and_tools(self):
-        def normalize(sample):
-            sample.update({
-                'image' : sample['image'].to(torch.float32)/255.
-            })
-            return sample
-        self.ds = self.ds.map(normalize)
-
-    def evaluate(self):
-        with torch.no_grad():
-            scores = self.model(self.ds['test'][:]['image'].to(self.dev))
-            labels = self.ds['test'][:]['label'].to(self.dev)
-            loss = self.loss_fn(scores, labels)
-
-        accuracy = torch.sum(torch.argmax(scores, dim=-1) == labels)/len(labels)
-        return accuracy, {
-            'scalar' : {
-                'loss/test' : loss,
-                'accuracy/test' : accuracy
-            }
-        }
-
-    def train_step(self, batch):
         # compute scores and calculate loss
-        scores = self.model(batch['image'].to(self.dev))
+        scores = model(batch['image'].to(self.dev))
         labels = batch['label'].to(self.dev)
         loss = self.loss_fn(scores, labels)
         accuracy = torch.sum(torch.argmax(scores, dim=-1) == labels)/len(labels)
+
+        return loss, accuracy
+
+    def train_step(self, model, batch):
+
+        loss, accuracy = self.step(model, batch, mode='train')
 
         return loss, {
             'scalar' : {
                 'loss/train' : loss,
                 'accuracy/train' : accuracy
+            }
+        }
+
+    def eval_step(self, model, batch, mode='val'):
+        loss, accuracy = self.step(model, batch, mode=mode)
+
+        return {
+            'loss': loss,
+            'accuracy': accuracy,
+        }
+
+    def on_eval_end(self, metrics):
+
+        loss = np.mean(metrics['loss'])
+        accuracy = np.mean(metrics['accuracy'])
+
+        return accuracy, {
+            'scalar' : {
+                'loss/val' : loss,
+                'accuracy/val' : accuracy
             }
         }

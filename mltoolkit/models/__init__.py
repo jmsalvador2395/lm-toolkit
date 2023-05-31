@@ -1,1 +1,4 @@
-from .nlp import TransformerEncDec
+from .nlp import (
+    TransformerEncDec,
+    RLModel
+)

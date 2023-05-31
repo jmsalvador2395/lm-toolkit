@@ -74,6 +74,11 @@ def set_defaults(cfg, keywords, debug=False):
     ).rstrip('/') + \
     f'/{cfg.general["experiment_name"]}'
     cfg.general.pop('logdir_base')
+    cfg.general['load_checkpoint'] = \
+        cfg.model.get(
+            'load_checkpoint',
+            None
+        )
 
     # set default model parameters
     cfg.model['device'] = cfg.model.get('device', 'cpu')
@@ -84,21 +89,10 @@ def set_defaults(cfg, keywords, debug=False):
         ).rstrip('/') + \
         f'/{cfg.general["experiment_name"]}'
     )
-    cfg.model['save_checkpoint'] = cfg.model.get('save_checkpoint', True)
     cfg.model['keep_higher_eval'] = \
         cfg.model.get(
             'keep_higher_eval',
             True
-        )
-    cfg.model['evaluate'] = \
-        cfg.model.get(
-            'evaluate',
-            True
-        )
-    cfg.model['load_checkpoint'] = \
-        cfg.model.get(
-            'load_checkpoint',
-            None
         )
 
     # set default optim parameters
@@ -106,13 +100,19 @@ def set_defaults(cfg, keywords, debug=False):
     cfg.optim['weight_decay'] = float(cfg.optim.get('weight_decay', 0))
     cfg.optim['clip_max_norm'] = cfg.optim.get('clip_max_norm', None)
     cfg.optim['clip_norm_type'] = cfg.optim.get('clip_norm_type', 2.0)
+    cfg.optim['swa_strat_is_linear'] = cfg.optim.get('swa_strat_is_linear', True)
+    cfg.optim['swa_anneal_epochs'] = cfg.optim.get('swa_anneal_epochs', 5)
+    cfg.optim['swa_lr'] = cfg.optim.get('swa_lr', 0.05)
+    cfg.optim['swa_bn_update_steps'] = cfg.optim.get('swa_bn_update_steps', 0)
 
-    # set default parameters if they don't exist
+    # set default data parameters if they don't exist
     cfg.data['num_epochs'] = cfg.data.get('num_epochs', 1)
     cfg.data['num_shards'] = cfg.data.get('num_shards', 1)
     cfg.data['shuffle'] = cfg.data.get('shuffle', True)
     cfg.data['batch_size'] = cfg.data.get('batch_size', 32)
     cfg.data['eval_freq'] = cfg.data.get('eval_freq', 1000)
     cfg.data['log_freq'] = cfg.data.get('log_freq', 1000)
+    cfg.data['using_test_loader'] = cfg.data.get('using_test_loader', False)
+
 
     return cfg

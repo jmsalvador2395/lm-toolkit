@@ -15,7 +15,6 @@ from mltoolkit.utils import (
     files,
     strings,
     display,
-    data
 )
 
 class TrainerExample(TrainerBase):

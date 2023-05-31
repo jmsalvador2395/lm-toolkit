@@ -5,7 +5,7 @@ from torch.nn import init
 import numpy as np
 from tqdm import tqdm
 
-from utils import data, misc
+#from utils import data, misc
 import copy
 
 class GloVe(nn.Module):
