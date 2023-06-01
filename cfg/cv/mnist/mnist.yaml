@@ -18,6 +18,10 @@ optim :
     # optimizer
     lr : .005
     weight_decay : 0
+    beta1: .9
+    beta2: .999
+    eps: 1.0e-8
+    clip_max_norm: 1
 
     # optimizer scheduler
     sched_step_size: 2

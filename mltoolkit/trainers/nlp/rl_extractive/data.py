@@ -18,31 +18,39 @@ def fetch_dataloaders(cfg, tokenizer):
 
     ######################## set variables from cfg #######################
 
-    batch_size = cfg['batch_size']
-    shuffle = cfg.get('shuffle', True)
-    num_workers = cfg.get('num_proc', 0)
-    pin_memory = cfg.get('pin_memory', False)
+    batch_size = cfg.data['batch_size']
+    shuffle = cfg.data.get('shuffle', True)
+    num_workers = cfg.data.get('num_proc', 0)
+    pin_memory = cfg.data.get('pin_memory', False)
 
     ######################################################################
 
     # first read in data as a huggingface dataset
     ds = datasets.load_dataset(
         'csv',
-        data_files=cfg['loc'],
-        cache_dir=cfg['cache_dir'],
+        data_files=cfg.data['loc'],
+        cache_dir=cfg.data['cache_dir'],
         num_proc=num_workers
     )
     ds = ds['train'].train_test_split(
-        test_size=1-cfg['train_test_split'],
-        train_size=cfg['train_test_split'],
+        test_size=1-cfg.data['train_test_split'],
+        train_size=cfg.data['train_test_split'],
     )
     ds = set_columns(ds)
 
     # convert to AllSides format.
     train_data, test_data = (
-        AllSides(ds['train'], cfg, tokenizer),
-        AllSides(ds['test'], cfg, tokenizer),
+        AllSides(ds['train'], cfg.data, tokenizer),
+        AllSides(ds['test'], cfg.data, tokenizer),
     )
+
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+
+    g = torch.Generator()
+    g.manual_seed(cfg.general['seed'])
 
     # return dataloader for train and test sets
     return (
@@ -53,6 +61,8 @@ def fetch_dataloaders(cfg, tokenizer):
             shuffle=shuffle,
             num_workers=num_workers,
             pin_memory=pin_memory,
+            worker_init_fn=seed_worker,
+            generator=g,
         ),
         DataLoader(
             test_data,
@@ -61,6 +71,8 @@ def fetch_dataloaders(cfg, tokenizer):
             shuffle=shuffle,
             num_workers=num_workers,
             pin_memory=pin_memory,
+            worker_init_fn=seed_worker,
+            generator=g,
         )
     )
 
@@ -253,7 +265,7 @@ def preprocess(source_text: str, tokenizer, max_len: int=512, debug=False):
     sents = sent_tokenize(truncated_text)
 
     # TODO might have to delete this
-    random.Random().shuffle(sents)
+    #random.Random().shuffle(sents)
 
     processed_text = cls_sep.join(sents)  # mine
 

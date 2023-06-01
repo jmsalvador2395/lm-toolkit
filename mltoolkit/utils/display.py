@@ -50,6 +50,9 @@ def with_header(msg: str, header, color='green', end='\n'):
 def warning(msg: str, end='\n'):
     with_header(msg, 'WARNING', color='yellow', end=end)
 
+def debug(msg: str, end='\n'):
+    with_header(msg, 'DEBUG', color='yellow', end=end)
+
 def error(msg: str, end='\n'):
     with_header(msg, 'ERROR', color='red', end=end)
 

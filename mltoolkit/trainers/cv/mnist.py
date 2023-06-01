@@ -23,10 +23,7 @@ class TrainerMNIST(TrainerBase):
     def __init__(self, config_path, debug=False):
         super().__init__(config_path, debug)
 
-    def init_loss_fn(self):
-        return torch.nn.CrossEntropyLoss()
-
-    def init_data_and_misc(self):
+    def init_data(self):
 
         cfg = self.cfg
 
@@ -67,6 +64,7 @@ class TrainerMNIST(TrainerBase):
 
     def init_model(self):
         cfg = self.cfg
+
         # define model
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
@@ -103,6 +101,9 @@ class TrainerMNIST(TrainerBase):
         
         return optimizer, scheduler
 
+    def init_aux(self):
+        self.loss_fn = nn.CrossEntropyLoss()
+
     def step(self, model, batch, mode='train'):
 
         # compute scores and calculate loss
@@ -132,7 +133,7 @@ class TrainerMNIST(TrainerBase):
             'accuracy': accuracy,
         }
 
-    def on_eval_end(self, metrics):
+    def on_eval_end(self, metrics, mode='val'):
 
         loss = np.mean(metrics['loss'])
         accuracy = np.mean(metrics['accuracy'])

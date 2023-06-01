@@ -25,11 +25,11 @@ class MLDecoder(nn.Module):
 
     def __init__(
         self,
-        w_rnn_units: int = 768,
-        dec_rnn_units: int = 256,
-        y_labels: int = 2,
-        y_em_size: int = 32,
-        decd_drop: float = 0.5,
+        w_rnn_units: int=768,
+        dec_rnn_units: int=256,
+        y_labels: int=2,
+        y_em_size: int=32,
+        decd_drop: float=0.5,
         *args,
         **kwargs,
     ):

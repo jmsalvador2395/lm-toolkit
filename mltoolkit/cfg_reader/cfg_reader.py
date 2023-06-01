@@ -114,5 +114,7 @@ def set_defaults(cfg, keywords, debug=False):
     cfg.data['log_freq'] = cfg.data.get('log_freq', 1000)
     cfg.data['using_test_loader'] = cfg.data.get('using_test_loader', False)
 
+    # set variable-dependent default values
+    cfg.optim['swa_begin'] = cfg.optim.get('swa_begin', cfg.data['num_epochs'])
 
     return cfg

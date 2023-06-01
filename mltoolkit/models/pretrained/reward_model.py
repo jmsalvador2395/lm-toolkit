@@ -2,26 +2,171 @@
 this file contains code for the model used to compute rewards for the rl_extractive trainer
 """
 # external imports
-from sentence_transformers import SentenceTransformer
+import re
 import torch
+import numpy as np
+import pandas as pd
+import itertools
+from torch import nn
+from sentence_transformers import SentenceTransformer, util
+from typing import Tuple, List, Dict
 
-class RewardModel:
+
+class RewardModel(nn.Module):
     
-    def __init__(self, model_name='all-mpnet-base-v1'):
-        self.model = SentenceTransformer(model_name)
+    def __init__(self, cfg):
+        super(RewardModel, self).__init__()
 
-    def __call__(self, sent_mat, a, b, a_minus_b, a_int_b, b_minus_a):
-        pass
+        self.model = SentenceTransformer(
+            cfg.get(
+                'reward_model',
+                'all-mpnet-base-v1'
+            )
+        )
+        self.batch_size = cfg['reward_batch_size']
+
+    def forward(self, batch, preds):
+        sent_mat, a, b, len_df, a_minus_b, a_int_b, b_minus_a = \
+            self._get_three_partitions(batch, preds.detach().cpu().numpy())
+        return (
+            sent_mat,
+            self._compute_reward(
+                sent_mat,
+                a,
+                b,
+                a_minus_b,
+                a_int_b,
+                b_minus_a
+            )
+        )
+
+
+    def _get_three_partitions(self, batch, pred_y: np.ndarray) -> Tuple:
+        """
+        Given the model prediction (1/0 for each sentence), divide into three sets. A-B, A \int B, B-A
+        :param batch: batch of data
+        :param pred_y: here pred_y acts as a selection map for sentences in intersection set
+        :return:
+        """
+
+        def _select_sentences(sentence_matrix, bool_map: np.ndarray) -> np.ndarray:
+            assert (
+                sentence_matrix.shape == bool_map.shape
+            ), "Shape mismatch while selecting sentences"
+            return np.char.multiply(sentence_matrix, bool_map)
+            # return [' '.join((" ".join(ii)).strip().split()) for ii in sel_sent_mat]
+
+        # Coovert src sentences to sentence matrix
+        def _src_sent_to_sent_mat(
+            src_dict: Dict[str, list]
+        ) -> Tuple[np.ndarray, pd.DataFrame]:
+            df = pd.DataFrame.from_dict(src_dict)
+            len_df = df.applymap(len)  # also a data frame
+            # len_df.columns = [f'{ii}_len' for ii in len_df.columns]
+            len_df["total_len"] = len_df.sum(axis=1)
+            max_tot_sents = len_df["total_len"].max()
+            df["empty_lists"] = len_df.apply(
+                lambda row: (max_tot_sents - row.total_len) * [""], axis=1
+            )
+            return (
+                np.array(
+                    df.apply(
+                        lambda row: sum(
+                            row.to_list(), []
+                        ),  # lambda func flattens list of lists here
+                        axis=1,
+                    ).to_list()
+                ),
+                len_df,
+            )
+
+        def _add_full_stop_at_end(doc_sents: List[str]):
+            # TODO: not correct. Pick the last non empty sentence
+            regex = re.compile("[.,@_!#$%^&*()<>?/\|}{~:]")
+            last_sent = doc_sents[-1].strip()
+            if doc_sents[-1] and regex.search(last_sent[-1]) == None:
+                last_sent += "."
+            doc_sents[-1] = last_sent
+            return doc_sents
+
+        batch_sz, max_sents = pred_y.shape
+
+        # combined sent mat
+        doc_names = list(batch.keys())  # {s1, s2} in any order
+        comb_src = {doc: data["src_sents"] for doc, data in batch.items()}
+        # aa = [_add_full_stop_at_end(doc_sents) for doc_sents in comb_src[doc_names[0]]]
+        # bb = [ii[0] for ii in aa]
+        # cc = [ii[0] for ii in comb_src[doc_names[0]]]
+        # if not all([x == y for x, y in zip(bb, cc)]):
+        #     zz = 1
+        # zz = 1
+        for key in comb_src.keys():
+            comb_src[key] = [
+                _add_full_stop_at_end(doc_sents) for doc_sents in comb_src[key]
+            ]
+        sent_mat, len_df = _src_sent_to_sent_mat(comb_src)
+
+        # get set A
+        d_name = doc_names[0]
+        a_sent_mat, a_len = _src_sent_to_sent_mat({d_name: batch[d_name]["src_sents"]})
+        assert (
+            a_len.columns[0] == len_df.columns[0]
+        ), "Make sure there is no issue of ordering when combining docs"
+
+        # get set B
+        d_name = doc_names[1]
+        b_sent_mat, b_len = _src_sent_to_sent_mat({d_name: batch[d_name]["src_sents"]})
+        assert (
+            b_len.columns[0] == len_df.columns[1]
+        ), "Make sure there is no issue of ordering when combining docs"
+
+        # sentences in intersection set
+        a_int_b = _select_sentences(sent_mat, pred_y)
+
+        invert_pred_y = (pred_y < 0.5).astype(
+            int
+        )  # we want the sentences not in intersection
+        # sentences in A - B set
+        ab_map = (
+            np.array(
+                [
+                    [1] * row[0] + [0] * row[1] + [0] * (max_sents - row[2])
+                    for idx, row in len_df.iterrows()
+                ]
+            )
+            * invert_pred_y
+        )
+        a_minus_b = _select_sentences(sent_mat, ab_map)
+
+        # sentences in B - A set
+        ba_map = (
+            np.array(
+                [
+                    [0] * row[0] + [1] * row[1] + [0] * (max_sents - row[2])
+                    for idx, row in len_df.iterrows()
+                ]
+            )
+            * invert_pred_y
+        )
+        b_minus_a = _select_sentences(sent_mat, ba_map)
+
+        return sent_mat, a_sent_mat, b_sent_mat, len_df, a_minus_b, a_int_b, b_minus_a
+
+
 
     def _compute_reward(
         self, sent_mat, a_sent_mat, b_sent_mat, a_minus_b, a_int_b, b_minus_a
     ) -> torch.Tensor:
         """Computes the reward scores"""
         # set last visible gpu as device for reward calculation
+        """
         last_gpu = (
             len(eutils.get_available_gpus()) - 1
         )  # how many gpus are available -1 is the index of the last gpu
         device = f"cuda:{last_gpu}" if torch.cuda.is_available() else "cpu"
+        """
+        device = self.model.device
+
         # if self.reward_gpu is None:
         #     last_gpu = (
         #         len(eutils.get_available_gpus()) - 1
@@ -48,9 +193,9 @@ class RewardModel:
 
             # encode sentence matrix
             flatten_docs = part1_docs + part2_docs
-            flatten_embeds = self.reward_model.encode(
+            flatten_embeds = self.model.encode(
                 flatten_docs,
-                batch_size=self.hparams.reward_batch_size,
+                batch_size=self.batch_size,
                 device=device,
                 convert_to_tensor=True,
             )
@@ -91,7 +236,7 @@ class RewardModel:
                         0
                     ]  # since we only want to count non-empty str across cols
                     # in case some rows have all zeros, that won't show up. So explicitly start from 0
-                    tmp = np.zeros(len(part), dtype=np.int)
+                    tmp = np.zeros(len(part), dtype=int)
                     eles, cts = np.unique(non_zeros, return_counts=True)
                     tmp[eles] = cts
                     out.append(tmp)
@@ -107,9 +252,9 @@ class RewardModel:
             )
             # get embeddings
             if len(flatten_sents) > 0:  # atleast one sentence in two partitions
-                flatten_embeds = self.reward_model.encode(
+                flatten_embeds = self.model.encode(
                     flatten_sents,
-                    batch_size=self.hparams.reward_batch_size,
+                    batch_size=self.batch_size,
                     device=device,
                     convert_to_tensor=True,
                 )

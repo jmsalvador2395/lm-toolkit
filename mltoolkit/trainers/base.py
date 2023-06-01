@@ -29,6 +29,7 @@ class TrainerBase:
         # set save location for logs
         if debug:
             self.save_loc = f'{files.project_root()}/debug'
+            display.debug(f'self.save_loc set to {self.save_loc}')
         elif 'save_loc' in self.cfg.data:
             self.save_loc = self.cfg.data['save_loc']
         else:
@@ -42,18 +43,17 @@ class TrainerBase:
         torch.manual_seed(seed)
         np.random.seed(seed)
         random.seed(seed)
-        self.rng = np.random.default_rng(seed)
 
     def init_optimizer(self):
         pass
 
-    def init_loss_fn(self):
-        pass
-
-    def init_data_and_misc(self):
+    def init_data(self):
         pass
 
     def init_model(self):
+        pass
+
+    def init_aux(self):
         pass
 
     def train_step(self, model, batch):
@@ -62,18 +62,40 @@ class TrainerBase:
     def eval_step(self, model, batch):
         pass
 
-    def on_eval_end(self, metric_list):
+    def on_eval_end(self, metric_list, mode):
         pass
 
     def _log(self, writer, metrics, step_number):
         if metrics is None:
             return
         if 'scalar' in metrics:
-            for metric in metrics['scalar'].keys():
+            for key, val in metrics['scalar'].items():
                 writer.add_scalar(
-                    metric,
-                    metrics['scalar'][metric],
+                    key,
+                    val,
                     step_number
+                )
+        if 'scalars' in metrics:
+            for key, val in metrics['scalars'].items():
+                writer.add_scalars(
+                    key,
+                    val,
+                    step_number
+                )
+        if 'image' in metrics:
+            for key, val in metrics['image'].items():
+                writer.add_image(
+                    key,
+                    val,
+                    step_number,
+                    dataformats='HWC'
+                )
+        if 'histogram' in metrics:
+            for key, val in metrics['histogram'].items():
+                writer.add_histogram(
+                    key,
+                    val,
+                    step_number,
                 )
 
     def _log_hparams(self, name, writer, cfg):
@@ -97,7 +119,7 @@ class TrainerBase:
         loss.backward()
 
         # gradient clipping
-        clip_max_norm = self.cfg.optim['clip_max_norm']
+        clip_max_norm = self.cfg.optim['clip_max_norm'] 
         if clip_max_norm is not None:
             nn.utils.clip_grad_norm_(
                 self.model.parameters(), 
@@ -116,9 +138,6 @@ class TrainerBase:
         cfg = self.cfg
         display.title('Setting Up Environment')
 
-        if self.debug:
-            display.note('running in debug mode', end='\n\n')
-
         # initialize primary variables. these will be assigned as we run through the setup process
         self.train_loader = None
         self.val_loader = None
@@ -126,20 +145,7 @@ class TrainerBase:
         self.model = None
         self.optimizer = None
         self.scheduler = None
-        self.loss_fn = None
         checkpoint = None # this will be used for checkpointing logic
-
-        """ loss function section """
-
-        # define loss_fn
-        display.in_progress('setting up loss function')
-        self.loss_fn = self.init_loss_fn()
-
-        # check if loss_fn is assigned
-        validate.is_assigned(self.loss_fn, 'self.loss_fn')
-        display.done(end='\n\n')
-
-        """ end loss function section """
 
         """ checkpointing section """
 
@@ -149,7 +155,10 @@ class TrainerBase:
         ckpt_dir = cfg.model['ckpt_dir']
         files.create_path(ckpt_dir)
 
-        display.note(f'checkpoints set to be saved to {ckpt_dir}')
+        if self.debug:
+            display.debug(f'checkpoints set to be saved to {ckpt_dir}')
+        else:
+            display.note(f'checkpoints set to be saved to {ckpt_dir}')
         display.done(end='\n\n')
 
         # load chackpoint if specified
@@ -161,15 +170,14 @@ class TrainerBase:
 
             display.done('\n\n')
 
-
         """ end checkpointing section """
 
         """ dataset section """
         # pre-process dataset 
-        display.in_progress('preparing dataset and tools ...')
+        display.in_progress('preparing datasets ...')
 
         self.train_loader, self.val_loader, self.test_loader = \
-            self.init_data_and_misc()
+            self.init_data()
 
         # check if variables have been defined
         validate.is_assigned(self.train_loader, 'self.train_loader')
@@ -200,6 +208,7 @@ class TrainerBase:
         params = self.model.parameters()
         learnable_params = sum(p.numel() for p in params if p.requires_grad)
         unlearnable_params = sum(p.numel() for p in params if not p.requires_grad)
+
         display.note(
             f'model has {learnable_params:,} learnable parameters and {unlearnable_params:,} unlearnable parameters'
         )
@@ -278,6 +287,15 @@ class TrainerBase:
 
         """ end stochastic weight averaging section """
 
+        """ auxiliary initialization """
+        display.in_progress('initializing auxiliary tools')
+
+        self.init_aux()
+
+        display.done(end='\n\n')
+
+        """ end auxiliary initialization """
+
         """ tensorboard section """
         # initialize tensorboard logger and log hyperparameters
 
@@ -332,16 +350,19 @@ class TrainerBase:
         # set model
         model = self.swa_model if use_swa_model else self.model
 
+        # set mode
+        mode = 'test' if use_test_loader else 'val'
+
         metric_list = []
         dl = self.test_loader if use_test_loader else self.val_loader
 
         for batch in tqdm(dl, total=len(dl), desc='validating', leave=False):
-            metric_list.append(self.eval_step(model, batch))
+            metric_list.append(self.eval_step(model, batch, mode))
         if cr:
             print('\r')
 
         metric_list = Dataset.from_list(metric_list)
-        score, aggregate_metrics = self.on_eval_end(metric_list)
+        score, aggregate_metrics = self.on_eval_end(metric_list, mode)
             
         return score, aggregate_metrics
 
@@ -408,16 +429,20 @@ class TrainerBase:
                 })
 
                 # log training metrics
-                trn_metrics.get('scalar', {}).update({
-                    'loss/train' : loss,
-                    'vars/epoch' : epoch,
-                    'vars/lr': \
-                        self.scheduler.get_last_lr()[-1]
-                        if not swa_active
-                        else self.swa_scheduler.get_last_lr()[-1],
-                })
-
                 if steps % log_freq == 0:
+
+                    # include defaults in the metrics
+                    trn_metrics['scalar'] = trn_metrics.get('scalar', {})
+                    trn_metrics['scalar'].update({
+                        'loss/train' : loss,
+                        'vars/epoch' : epoch,
+                        'vars/lr': \
+                            self.scheduler.get_last_lr()[-1]
+                            if not swa_active
+                            else self.swa_scheduler.get_last_lr()[-1],
+                    })
+
+                    # log
                     self._log(writer, trn_metrics, steps)
 
                 # log evaluation statistics
