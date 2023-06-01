@@ -1,0 +1,46 @@
+general: 
+    seed: 6650
+    logdir_base: "{{project_root}}/tensorboard"
+    note: "trying previous best lr and smaller embedding dim"
+
+model:
+    name: "autolm"
+    trgt_vocab_size: 50000
+    ckpt_dir: "{{project_root}}/checkpoints"
+    seq_len: 512
+    embedding_dim: 1024
+    num_decoder_layers: 12
+    num_hidden_layers: 1
+    decoder_dropout: 0.1
+    mlp_dropout: 0.1
+    min_freq: 1
+    nhead: 8
+    dim_feed_forward: 1024
+    device: 
+        - "cuda:2"
+        - "cuda:3"
+    save_checkpoint: True
+    keep_higher_eval: False
+    evaluate: True
+    load_checkpoint: "/data/john/projects/mltoolkit/checkpoints/20230519-064232-autolm/best_model.pth"
+
+optim:
+    #lr: 3.0e-5
+    lr: 7.0e-7
+    weight_decay: 5.0e-6
+    beta1: .9
+    beta2: .999
+    eps: 1.0e-8
+    scheduler_freq: 1000
+    clip_max_norm: 1
+
+data: 
+    num_proc: 28
+    num_shards: 1
+    cache_dir: "{{home}}/.cache/huggingface"
+    shuffle: True
+    batch_size: 20
+    num_epochs: 10
+    eval_freq: 300
+    log_freq: 10
+    tknzr_from_scratch: False

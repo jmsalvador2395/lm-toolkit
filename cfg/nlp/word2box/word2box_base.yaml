@@ -1,0 +1,33 @@
+general : 
+    seed : 123
+    logdir_base : "{{project_root}}/tensorboard"
+    note : "a quick note about this training run. this note will show up in tensorboard."
+
+model :
+    name : "word2box"
+    embedding_dim : 200
+    trgt_vocab_size : 150000
+    min_freq : 100
+    ckpt_dir : "{{project_root}}/checkpoints"
+    device : "cuda:1"
+    beta : 1.9678289474987882
+    volume_temp : 0.33243242379830407
+
+optim :
+    lr : .005
+    weight_decay : 0
+
+task :
+    window_size : 5
+    neg_samples : 2
+    subsampling_threshold : .00001
+
+data : 
+    num_proc : 20
+    num_shards : 1
+    cache_dir : "{{home}}/ds_cache"
+    shuffle : True
+    batch_size : 4096
+    num_epochs : 3
+    eval_freq : 1000
+    log_freq : 1000
