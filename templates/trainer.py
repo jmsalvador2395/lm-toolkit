@@ -104,7 +104,7 @@ class TrainerExample(TrainerBase):
         """
         Use this function to initialize any other important variables that you want to use for training.
         """
-        self.loss_fn = nn.CrossEntropyLoss()
+        pass
 
     def train_step(self, model: nn.Module, batch: T) -> Tuple[torch.Tensor, Dict]:
         """
@@ -180,6 +180,9 @@ class TrainerExample(TrainerBase):
                 to True if you want to keep higher values and False to keep lower
         """
 
+        # compute target metric
+        target_metric = np.mean(metrics['loss'])
+
         # compute other metrics
         metrics = {
             'scalar': {
@@ -195,3 +198,5 @@ class TrainerExample(TrainerBase):
                 'example_scalars': None # figure it out lol
             }, 
         }
+
+        return target_metric, metrics
