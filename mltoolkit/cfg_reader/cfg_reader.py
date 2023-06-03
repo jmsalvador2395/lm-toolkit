@@ -7,7 +7,12 @@ from collections import namedtuple
 from random import randint
 
 # local imports
-from mltoolkit.utils import validate, files, strings
+from mltoolkit.utils import (
+    validate,
+    files,
+    strings,
+    display,
+)
 def load(path_str: str, debug=False):
     """
     loads a yaml config file and substitues the keywords with pre-set values
@@ -44,35 +49,42 @@ def load(path_str: str, debug=False):
     cfg = {**base_cfg, **yaml.safe_load(cfg)}
     cfg = namedtuple('Config', categories)(**cfg)
 
+    check_required(cfg)
+
     # set default values
     cfg = set_defaults(cfg, keywords, debug)
-    cfg = set_debug(cfg, debug)
 
-    return cfg, keywords
-
-def set_debug(cfg, debug=False):
     if debug:
         debug_dir = f'{files.project_root()}/debug'
-        cfg.general['log_dir'] = debug_dir + '/tensorboard'
-        cfg.model['ckpt_dir'] = debug_dir + '/ckpt'
 
-    return cfg
+        cfg.general['log_dir'] = \
+            debug_dir \
+            + f'/tensorboard/{cfg.general["experiment_name"]}' 
+        display.debug(f'log dir set to {cfg.general["log_dir"]}')
+
+        cfg.model['ckpt_dir'] = debug_dir + '/ckpt'
+        display.debug(f'checkpoint directory set to {cfg.model["ckpt_dir"]}')
+
+
+    return cfg, keywords
 
 def set_defaults(cfg, keywords, debug=False):
     # set experiment name
     cfg.general['experiment_name'] = \
-        f'{keywords["timestamp"]}-{cfg.model.get("name", "model")}'
+        f'{keywords["timestamp"]}-{cfg.general["trainer"]}'
 
     # set general parameters
     cfg.general['seed'] = cfg.general.get(
         'seed',
         randint(0, 2**32)
     )
+
+    # set tensorboard logging directory
     cfg.general['log_dir'] = cfg.general.get(
         'logdir_base',
         f'{files.project_root()}/tensorboard'
-    ).rstrip('/') + \
-    f'/{cfg.general["experiment_name"]}'
+    ).rstrip('/') + f'/{cfg.general["experiment_name"]}'
+
     cfg.general.pop('logdir_base')
     cfg.general['load_checkpoint'] = \
         cfg.model.get(
@@ -97,8 +109,8 @@ def set_defaults(cfg, keywords, debug=False):
 
     # set default optim parameters
     cfg.optim['lr'] = float(cfg.optim.get('lr', 1e-3))
-    cfg.optim['weight_decay'] = float(cfg.optim.get('weight_decay', 0))
     cfg.optim['clip_max_norm'] = cfg.optim.get('clip_max_norm', None)
+    cfg.optim['weight_decay'] = float(cfg.optim.get('weight_decay', 0))
     cfg.optim['clip_norm_type'] = cfg.optim.get('clip_norm_type', 2.0)
     cfg.optim['swa_strat_is_linear'] = cfg.optim.get('swa_strat_is_linear', True)
     cfg.optim['swa_anneal_epochs'] = cfg.optim.get('swa_anneal_epochs', 5)
@@ -107,7 +119,6 @@ def set_defaults(cfg, keywords, debug=False):
 
     # set default data parameters if they don't exist
     cfg.data['num_epochs'] = cfg.data.get('num_epochs', 1)
-    cfg.data['num_shards'] = cfg.data.get('num_shards', 1)
     cfg.data['shuffle'] = cfg.data.get('shuffle', True)
     cfg.data['batch_size'] = cfg.data.get('batch_size', 32)
     cfg.data['eval_freq'] = cfg.data.get('eval_freq', 1000)
@@ -118,3 +129,10 @@ def set_defaults(cfg, keywords, debug=False):
     cfg.optim['swa_begin'] = cfg.optim.get('swa_begin', cfg.data['num_epochs'])
 
     return cfg
+
+def check_required(cfg):
+    # check if trainer is assigned
+    try:
+        cfg.general['trainer']
+    except Exception as e:
+        display.error('config parameter cfg.general[\'trainer\'] is not set')

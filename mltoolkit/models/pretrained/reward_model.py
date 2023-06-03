@@ -48,47 +48,6 @@ class RewardModel(nn.Module):
         :param pred_y: here pred_y acts as a selection map for sentences in intersection set
         :return:
         """
-
-        def _select_sentences(sentence_matrix, bool_map: np.ndarray) -> np.ndarray:
-            assert (
-                sentence_matrix.shape == bool_map.shape
-            ), "Shape mismatch while selecting sentences"
-            return np.char.multiply(sentence_matrix, bool_map)
-            # return [' '.join((" ".join(ii)).strip().split()) for ii in sel_sent_mat]
-
-        # Coovert src sentences to sentence matrix
-        def _src_sent_to_sent_mat(
-            src_dict: Dict[str, list]
-        ) -> Tuple[np.ndarray, pd.DataFrame]:
-            df = pd.DataFrame.from_dict(src_dict)
-            len_df = df.applymap(len)  # also a data frame
-            # len_df.columns = [f'{ii}_len' for ii in len_df.columns]
-            len_df["total_len"] = len_df.sum(axis=1)
-            max_tot_sents = len_df["total_len"].max()
-            df["empty_lists"] = len_df.apply(
-                lambda row: (max_tot_sents - row.total_len) * [""], axis=1
-            )
-            return (
-                np.array(
-                    df.apply(
-                        lambda row: sum(
-                            row.to_list(), []
-                        ),  # lambda func flattens list of lists here
-                        axis=1,
-                    ).to_list()
-                ),
-                len_df,
-            )
-
-        def _add_full_stop_at_end(doc_sents: List[str]):
-            # TODO: not correct. Pick the last non empty sentence
-            regex = re.compile("[.,@_!#$%^&*()<>?/\|}{~:]")
-            last_sent = doc_sents[-1].strip()
-            if doc_sents[-1] and regex.search(last_sent[-1]) == None:
-                last_sent += "."
-            doc_sents[-1] = last_sent
-            return doc_sents
-
         batch_sz, max_sents = pred_y.shape
 
         # combined sent mat
@@ -357,3 +316,45 @@ class RewardModel(nn.Module):
                 + 0.1 * sent_rewards["sent__b__a_minus_b__neg"]
             )
         )
+
+def _select_sentences(sentence_matrix, bool_map: np.ndarray) -> np.ndarray:
+    assert (
+        sentence_matrix.shape == bool_map.shape
+    ), "Shape mismatch while selecting sentences"
+    return np.char.multiply(sentence_matrix, bool_map)
+    # return [' '.join((" ".join(ii)).strip().split()) for ii in sel_sent_mat]
+
+# Coovert src sentences to sentence matrix
+def _src_sent_to_sent_mat(
+    src_dict: Dict[str, list]
+) -> Tuple[np.ndarray, pd.DataFrame]:
+    df = pd.DataFrame.from_dict(src_dict)
+    len_df = df.applymap(len)  # also a data frame
+    # len_df.columns = [f'{ii}_len' for ii in len_df.columns]
+    len_df["total_len"] = len_df.sum(axis=1)
+    max_tot_sents = len_df["total_len"].max()
+    df["empty_lists"] = len_df.apply(
+        lambda row: (max_tot_sents - row.total_len) * [""], axis=1
+    )
+    return (
+        np.array(
+            df.apply(
+                lambda row: sum(
+                    row.to_list(), []
+                ),  # lambda func flattens list of lists here
+                axis=1,
+            ).to_list()
+        ),
+        len_df,
+    )
+
+def _add_full_stop_at_end(doc_sents: List[str]):
+    # TODO: not correct. Pick the last non empty sentence
+    regex = re.compile("[.,@_!#$%^&*()<>?/\|}{~:]")
+    last_sent = doc_sents[-1].strip()
+    if doc_sents[-1] and regex.search(last_sent[-1]) == None:
+        last_sent += "."
+    doc_sents[-1] = last_sent
+    return doc_sents
+
+

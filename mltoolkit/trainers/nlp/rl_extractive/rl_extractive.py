@@ -6,12 +6,15 @@ This is an implementation for extractive summarization using reinforcement learn
 import datasets
 import io
 import numpy as np
+import os
 import torch
+
 from PIL import Image
 from datasets import Dataset
 from matplotlib import pyplot as plt
 from rouge_score.rouge_scorer import RougeScorer
 from torch import nn
+from torch.nn import functional as F
 from torch.distributions import Categorical
 from transformers import AutoTokenizer
 
@@ -84,7 +87,6 @@ class TrainerRLExtractive(TrainerBase):
         cfg = self.cfg
 
         # initialize tokenizer
-        import os
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
         self.tokenizer = AutoTokenizer.from_pretrained(
             cfg.data.get('tokenizer_name', 'bert-base-uncased'),
@@ -103,8 +105,10 @@ class TrainerRLExtractive(TrainerBase):
 
         cfg = self.cfg
 
-        self.k = cfg.model['budget']
-        self.lmda = cfg.model['lambda']
+        self.k=cfg.model.get('budget', 3)
+        #self.lmda = cfg.model.get('lambda', 1)
+        self.budget_scale = cfg.model.get('budget_scale', .05)
+        self.exponent = cfg.model.get('reward_exponent', 1)
 
         self.reward_hist = {
             'train': [],
@@ -116,6 +120,7 @@ class TrainerRLExtractive(TrainerBase):
         }
 
         self.step_counter = 0
+        self.stay_in_budget = cfg.model.get('stay_in_budget', False)
         
 
     def evaluate_rouge(self, references, preds, sent_mat):
@@ -163,17 +168,13 @@ class TrainerRLExtractive(TrainerBase):
                     else val
 
         # compute scores
-        scores, mask_cls, shuffled_grid, unshuffled_grid = \
+        scores, preds, episode_lengths, mask_cls = \
             model(batch)
-
-        # sample actions
-        preds = \
-            Categorical(torch.exp(scores)).sample()
-        preds *= mask_cls
 
         # get probabilities that correspond to each prediction
         row, col = np.indices(preds.shape)
-        pred_probs = scores[row, col, preds]
+        log_probs = scores[row, col, preds]
+        picked_indices = col[preds.bool().detach().cpu().numpy()]
 
         # compute base reward term
         sent_mat, base_term = self.reward_model(batch, preds)
@@ -181,23 +182,23 @@ class TrainerRLExtractive(TrainerBase):
 
         # compute budget term
         sent_counts = torch.sum(preds, dim=-1)
-        episode_lengths= torch.sum(mask_cls, dim=-1)
-        budget_term = -abs(sent_counts - self.k) / episode_lengths
+        doc_lengths = torch.sum(mask_cls)
+        budget_term = -F.relu(sent_counts - self.k, 0)*self.budget_scale
 
         # aggregate terms
-        aggregate_reward = base_term + self.lmda*budget_term
+        aggregate_reward = base_term + budget_term
 
         # save reward terms for plotting
         reward_parts = {
             'step': self.step_counter,
             'base term': torch.mean(base_term).detach().cpu().numpy(),
-            'budget term': self.lmda*torch.mean(budget_term).detach().cpu().numpy(),
+            'budget term': torch.mean(budget_term).detach().cpu().numpy(),
             'aggregate': torch.mean(aggregate_reward).detach().cpu().numpy(),
         }
 
         # compute loss
-        loss = -pred_probs * aggregate_reward[:, None]
-        loss = torch.mean(loss[mask_cls.bool()])
+        loss = -log_probs * aggregate_reward[:, None]
+        loss = torch.mean(loss[mask_cls])
         
         # compute rouge
         rouge_scores = self.evaluate_rouge(
@@ -206,11 +207,48 @@ class TrainerRLExtractive(TrainerBase):
             sent_mat
         )
 
-        # use local step counter to decide when to compute rouge and append to history with reawrd
-        if mode == 'train' and self.step_counter % self.cfg.data['log_freq'] == 0:
+        metrics = rouge_scores
+        metrics.update({
+            'loss': loss,
+            'base term': base_term.detach().cpu().numpy(),
+            'budget term': budget_term.detach().cpu().numpy(),
+            'aggregate': aggregate_reward.detach().cpu().numpy(),
+            'base term avg': reward_parts['base term'],
+            'budget term avg': reward_parts['budget term'],
+            'aggregate avg': reward_parts['aggregate'],
+            'episode lengths': episode_lengths,
+            'action probs': torch.exp(log_probs[mask_cls]).detach().cpu().numpy(),
+            'extracted sentences': picked_indices
+        })
 
-            self.reward_hist[mode].append(reward_parts)
-            self.rouge_hist[mode].append(rouge_scores)
+        return loss, metrics
+
+    def train_step(self, model, batch):
+
+        loss, metrics = self.step(model, batch)
+        mode = 'train'
+
+        if self.step_counter % self.cfg.data['log_freq'] == 0:
+
+            self.reward_hist[mode].append({
+                'step': self.step_counter,
+                'base term': metrics['base term avg'],
+                'budget term': metrics['budget term avg'],
+                'aggregate': metrics['aggregate avg'],
+            })
+
+            self.rouge_hist[mode].append({
+                'step': self.step_counter,
+                'rouge1-precision': metrics['rouge1-precision'],
+                'rouge1-recall': metrics['rouge1-recall'],
+                'rouge1-fmeasure': metrics['rouge1-fmeasure'],
+                'rouge2-precision': metrics['rouge2-precision'],
+                'rouge2-recall': metrics['rouge2-recall'],
+                'rouge2-fmeasure': metrics['rouge2-fmeasure'],
+                'rougeL-precision': metrics['rougeL-precision'],
+                'rougeL-recall': metrics['rougeL-recall'],
+                'rougeL-fmeasure': metrics['rougeL-fmeasure'],
+            })
 
             rouge_plots = plotter.plot_rouge_history(
                 self.rouge_hist[mode],
@@ -218,45 +256,36 @@ class TrainerRLExtractive(TrainerBase):
             )
             reward_plot = plotter.plot_reward_history(
                 self.reward_hist[mode],
-                mode
+                mode,
+                self.stay_in_budget,
             )
 
-            metrics = {
+            categorized_metrics = {
                 'image': rouge_plots | reward_plot,
                 'scalar': {
-                    f'scalar/reward/{mode}': torch.mean(aggregate_reward).cpu().numpy(),
-                    f'scalar/rouge1/{mode}': rouge_scores['rouge1-fmeasure'],
-                    f'scalar/rouge2/{mode}': rouge_scores['rouge2-fmeasure'],
-                    f'scalar/rougeL/{mode}': rouge_scores['rougeL-fmeasure'],
+                    'loss': metrics['loss'],
+                    'reward avg/base': metrics['base term avg'],
+                    'reward avg/budget': metrics['budget term avg'],
+                    'reward avg/aggregate': metrics['aggregate avg'],
+                    'rouge/rouge1': metrics['rouge1-fmeasure'],
+                    'rouge/rouge2': metrics['rouge2-fmeasure'],
+                    'rouge/rougeL': metrics['rougeL-fmeasure'],
                 },
                 'histogram': {
-                    f'reward base/{mode}': base_term.detach().cpu().numpy(),
-                    f'reward budget/{mode}': budget_term.detach().cpu().numpy(),
-                    f'reward aggregate/{mode}': aggregate_reward.detach().cpu().numpy(),
+                    'reward base': metrics['base term'],
+                    'reward budget': metrics['budget term'],
+                    'reward aggregate': metrics['aggregate'],
+                    'episode lengths': metrics['episode lengths'],
+                    'action probs': metrics['action probs'],
+                    'extracted sentences': metrics['extracted sentences'],
                 },
             }
-        elif mode == 'val':
-            metrics = rouge_scores
-            metrics.update({
-                'loss': loss,
-                'base term': base_term.detach().cpu().numpy(),
-                'budget term': budget_term.detach().cpu().numpy(),
-                'aggregate': aggregate_reward.detach().cpu().numpy(),
-                'base term avg': reward_parts['base term'],
-                'budget term avg': reward_parts['budget term'],
-                'aggregate avg': reward_parts['aggregate'],
-            })
+
+            metrics = categorized_metrics
         else:
             metrics = {}
 
-        # increment step counter
-        if mode == 'train': self.step_counter += 1
-
-        return loss, metrics
-
-    def train_step(self, model, batch):
-
-        loss, metrics = self.step(model, batch)
+        self.step_counter += 1
 
         return loss, metrics
 
@@ -296,31 +325,28 @@ class TrainerRLExtractive(TrainerBase):
         )
         reward_plot = plotter.plot_reward_history(
             self.reward_hist[mode],
-            mode
+            mode,
+            self.stay_in_budget,
         )
-        
+
         metrics = {
             'image': rouge_plots | reward_plot,
             'scalar': {
-                f'loss/{mode}': np.mean(aggregate_metrics['loss']),
-                f'scalar/reward/{mode}': np.mean(aggregate_metrics['aggregate avg']),
-                f'scalar/rouge1/{mode}': self.rouge_hist[mode][-1]['rouge1-fmeasure'],
-                f'scalar/rouge2/{mode}': self.rouge_hist[mode][-1]['rouge2-fmeasure'],
-                f'scalar/rougeL/{mode}': self.rouge_hist[mode][-1]['rougeL-fmeasure'],
+                'loss': np.mean(aggregate_metrics['loss']),
+                'reward avg/aggregate': np.mean(aggregate_metrics['aggregate avg']),
+                'reward avg/budget': np.mean(aggregate_metrics['budget term avg']),
+                'reward avg/base': np.mean(aggregate_metrics['aggregate avg']),
+                'rouge/rouge1': self.rouge_hist[mode][-1]['rouge1-fmeasure'],
+                'rouge/rouge2': self.rouge_hist[mode][-1]['rouge2-fmeasure'],
+                'rouge/rougeL': self.rouge_hist[mode][-1]['rougeL-fmeasure'],
             },
             'histogram': {
-                f'reward base/{mode}': np.concatenate([
-                    np.array(arr)
-                    for arr in aggregate_metrics['base term']
-                ]),
-                f'reward budget/{mode}': np.concatenate([
-                    np.array(arr)
-                    for arr in aggregate_metrics['budget term']
-                ]),
-                f'reward aggregate/{mode}': np.concatenate([
-                    np.array(arr)
-                    for arr in aggregate_metrics['aggregate']
-                ]),
+                'reward base': np.concatenate(aggregate_metrics['base term']),
+                'reward budget': np.concatenate(aggregate_metrics['budget term']),
+                'reward aggregate': np.concatenate(aggregate_metrics['aggregate']),
+                'episode lengths': np.concatenate(aggregate_metrics['episode lengths']),
+                'action probs': np.concatenate(aggregate_metrics['action probs']),
+                'extracted sentences': np.concatenate(aggregate_metrics['extracted sentences']),
             },
         }
 

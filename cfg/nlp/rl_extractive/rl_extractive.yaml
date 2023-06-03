@@ -1,15 +1,12 @@
 general: 
-    seed: 6650
+    trainer: "rl_extractive"
+    seed: 123
     logdir_base: "{{project_root}}/tensorboard"
     note: "test"
 
 model:
-    name: "rl_extractive"
     ckpt_dir: "{{project_root}}/checkpoints"
     save_checkpoint: True
-    evaluate: True
-    keep_higher_eval: True
-    budget: .3
     keep_higher_eval: True
     #load_checkpoint: "/data/john/projects/mltoolkit/checkpoints/20230519-064232-autolm/best_model.pth"
 
@@ -27,6 +24,9 @@ model:
     freeze_base: True
     base_model: "distilbert"
     base_model_ckpt: "{{project_root}}/data/pretrained_models/bert/distilbert_ext.pt"
+    budget: 3
+    budget_scale: 0.01
+    stay_in_budget: False
 
     # reward model params
     reward_model: 'all-mpnet-base-v1'
@@ -34,16 +34,14 @@ model:
     reward_batch_size: 100
     reward_scale: 10
     reward_exponent: 2
-    budget: 3
-    lambda: .75
 
 optim:
-    lr: 1.0e-5
+    lr: 6.0e-6
     weight_decay: 5.0e-6
     beta1: .9
     beta2: .999
     eps: 1.0e-8
-    clip_max_norm: 1
+    clip_max_norm: 1.5
 
     # optimizer scheduler
     sched_step_size: 10

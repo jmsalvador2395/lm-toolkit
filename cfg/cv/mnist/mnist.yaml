@@ -1,11 +1,11 @@
 general : 
+    trainer: "mnist"
     seed : 125
     logdir_base : "{{project_root}}/tensorboard"
     note : "a quick note about this training run. this note will show up in tensorboard."
     load_checkpoint: null
 
 model :
-    name : "mnist"
     in_size : 784
     hidden_dim : 500
     ckpt_dir : "{{project_root}}/checkpoints"

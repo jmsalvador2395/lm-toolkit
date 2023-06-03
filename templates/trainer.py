@@ -24,9 +24,16 @@ from mltoolkit.utils import (
     display,
 )
 
-class TrainerMNIST(TrainerBase):
+class TrainerExample(TrainerBase):
     
     def __init__(self, config_path, debug=False):
+        """
+        initialization function. ideally there is no need to edit this since initialization is performed at designated functions
+
+        Input:
+            config_path[str]: the location of the YAML config. parent class takes care of loading the config.
+            debug[bool]: used to set debug-related parameters. affected parameters will be printed to console
+        """
         super().__init__(config_path, debug)
 
     def init_data(self) -> DataLoader:
@@ -39,42 +46,20 @@ class TrainerMNIST(TrainerBase):
             test_loader[Dataloader]: the dataloader used for final testing. NOT YET IMPLEMENTED
         """
 
+        # assign cfg to use freely
         cfg = self.cfg
 
-        # load mnist dataset
-        self.ds = datasets.load_dataset(
-            'mnist',
-            cache_dir=cfg.data['cache_dir']
-        ).with_format('torch')
-        in_size = cfg.model['hidden_dim']
+        # initialize train dataloader
+        train_loader = None
 
-        # preprocess
-        def normalize(batch):
-            batch.update({
-                'image' : batch['image'].to(torch.float32)/255.
-            })
-            return batch
+        # initialize validation dataloader
+        val_loader = None
 
-        ds = self.ds.map(
-            normalize,
-            batched=True,
-            batch_size=1000,
-            num_proc=cfg.data['num_proc'],
-        )
+        # TODO build test set evaluation into TrainerBase
+        # initialize test dataloader
+        test_loader = None
 
-        train_loader = DataLoader(
-            ds['train'],
-            shuffle=cfg.data['shuffle'],
-            batch_size=cfg.data['batch_size'],
-        )
-
-        val_loader = DataLoader(
-            ds['test'],
-            shuffle=cfg.data['shuffle'],
-            batch_size=cfg.data['batch_size'],
-        )
-
-        return train_loader, val_loader, None
+        return train_loader, val_loader, test_loader
 
     def init_model(self):
         """
@@ -85,23 +70,11 @@ class TrainerMNIST(TrainerBase):
             model[nn.Module]: the model used for training
         """
         
+        # assign cfg to use freely
         cfg = self.cfg
 
         # define model
-        model = torch.nn.Sequential(
-            torch.nn.Flatten(),
-            torch.nn.Linear(
-                cfg.model['in_size'], 
-                cfg.model['hidden_dim']
-            ),
-            torch.nn.BatchNorm1d(cfg.model['hidden_dim']),
-            torch.nn.ReLU(),
-            torch.nn.Dropout(p=cfg.model['dropout']),
-            torch.nn.Linear(
-                cfg.model['hidden_dim'],
-                cfg.model['num_classes'],
-            )
-        ).to(self.dev)
+        model = None
 
         return model
 
@@ -113,21 +86,14 @@ class TrainerMNIST(TrainerBase):
             optim_tools[Tuple[Optimizer, LRScheduler]: a tuple that includes the optimizer and scheduler
         """
 
+        # assign cfg to use freely
         cfg = self.cfg
 
         # optimizer
-        optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=self.cfg.optim['lr'],
-            weight_decay=self.cfg.optim['weight_decay']
-        )
+        optimizer = None
 
         # scheduler
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer,
-            cfg.optim['sched_step_size'],
-            gamma=cfg.optim['sched_gamma'],
-        )
+        scheduler = None
         
         return (
             optimizer,
@@ -139,16 +105,6 @@ class TrainerMNIST(TrainerBase):
         Use this function to initialize any other important variables that you want to use for training.
         """
         self.loss_fn = nn.CrossEntropyLoss()
-
-    def step(self, model, batch, mode='train'):
-
-        # compute scores and calculate loss
-        scores = model(batch['image'].to(self.dev))
-        labels = batch['label'].to(self.dev)
-        loss = self.loss_fn(scores, labels)
-        accuracy = torch.sum(torch.argmax(scores, dim=-1) == labels)/len(labels)
-
-        return loss, accuracy
 
     def train_step(self, model: nn.Module, batch: T) -> Tuple[torch.Tensor, Dict]:
         """
@@ -164,14 +120,26 @@ class TrainerMNIST(TrainerBase):
                 refer to {project_root}/mltoolkit/trainers/base.py for the currently supported keyword trackers
         """
 
-        loss, accuracy = self.step(model, batch, mode='train')
+        # compute loss
+        loss = None
 
-        return loss, {
-            'scalar' : {
-                'loss' : loss,
-                'accuracy' : accuracy
-            }
+        # compute other metrics
+        metrics = {
+            'scalar': {
+                'example_scalar': None
+            },
+            'image': {
+                'example_image': None
+            },
+            'histogram': {
+                'example_histogram': None
+            },
+            'scalars': { # this is not recommended to uses. very messy
+                'example_scalars': None
+            }, 
         }
+
+        return loss, metrics
 
     def eval_step(self, model: nn.Module, batch: T, mode: str):
         """
@@ -187,12 +155,17 @@ class TrainerMNIST(TrainerBase):
                 accumulate these metrics into a Dataset object and will be used as input 
                 to on_eval_end() for final aggregation
         """
-        loss, accuracy = self.step(model, batch, mode=mode)
+        # compute loss
+        loss = None
 
-        return {
-            'loss': loss,
-            'accuracy': accuracy,
+        metrics = {
+            'example_scalar': None,
+            'example_image': None,
+            'example_histogram': None,
+            'example_scalars': None,
         }
+
+        return loss, metrics
 
     def on_eval_end(self, metrics: Dataset, mode: str):
         """
@@ -207,12 +180,18 @@ class TrainerMNIST(TrainerBase):
                 to True if you want to keep higher values and False to keep lower
         """
 
-        loss = np.mean(metrics['loss'])
-        accuracy = np.mean(metrics['accuracy'])
-
-        return accuracy, {
-            'scalar' : {
-                'loss' : loss,
-                'accuracy' : accuracy
-            }
+        # compute other metrics
+        metrics = {
+            'scalar': {
+                'example_scalar': np.mean(metrics['example_scalar'])
+            },
+            'image': {
+                'example_image': metrics['example_image'][-1]
+            },
+            'histogram': {
+                'example_histogram': np.concatenate(metrics['example_histogram'])
+            },
+            'scalars': { # this is not recommended to uses. very messy
+                'example_scalars': None # figure it out lol
+            }, 
         }

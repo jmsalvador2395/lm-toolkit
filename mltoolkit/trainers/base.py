@@ -65,27 +65,27 @@ class TrainerBase:
     def on_eval_end(self, metric_list, mode):
         pass
 
-    def _log(self, writer, metrics, step_number):
+    def _log(self, writer, metrics, step_number, mode='train'):
         if metrics is None:
             return
         if 'scalar' in metrics:
             for key, val in metrics['scalar'].items():
                 writer.add_scalar(
-                    key,
+                    f'{key}/{mode}',
                     val,
                     step_number
                 )
         if 'scalars' in metrics:
             for key, val in metrics['scalars'].items():
                 writer.add_scalars(
-                    key,
+                    f'{key}/{mode}',
                     val,
                     step_number
                 )
         if 'image' in metrics:
             for key, val in metrics['image'].items():
                 writer.add_image(
-                    key,
+                    f'{key}/{mode}',
                     val,
                     step_number,
                     dataformats='HWC'
@@ -93,7 +93,7 @@ class TrainerBase:
         if 'histogram' in metrics:
             for key, val in metrics['histogram'].items():
                 writer.add_histogram(
-                    key,
+                    f'{key}/{mode}',
                     val,
                     step_number,
                 )
@@ -220,7 +220,7 @@ class TrainerBase:
 
         # initialize optimizer and throw errors if self.optim is not initialized
         display.in_progress('initializing optimizer and lr scheduler ...')
-        self.optimizer, self.scheduler = self.init_optimizer(self.model)
+        self.optimizer, self.scheduler = self.init_optimizer()
         if checkpoint is not None:
             self.optimizer.load_state_dict(checkpoint['optimizer'])
             self.scheduler.load_state_dict(checkpoint['scheduler'])
@@ -434,7 +434,7 @@ class TrainerBase:
                     # include defaults in the metrics
                     trn_metrics['scalar'] = trn_metrics.get('scalar', {})
                     trn_metrics['scalar'].update({
-                        'loss/train' : loss,
+                        'loss' : loss,
                         'vars/epoch' : epoch,
                         'vars/lr': \
                             self.scheduler.get_last_lr()[-1]
@@ -443,13 +443,13 @@ class TrainerBase:
                     })
 
                     # log
-                    self._log(writer, trn_metrics, steps)
+                    self._log(writer, trn_metrics, steps, mode='train')
 
                 # log evaluation statistics
                 if (steps % eval_freq) == 0:
 
                     model_score, eval_metrics = self.evaluation_procedure()
-                    self._log(writer, eval_metrics, steps)
+                    self._log(writer, eval_metrics, steps, mode='val')
 
                     # save model state dictionary
                     if self._compare_scores(model_score, best_model_score):
@@ -552,7 +552,7 @@ class TrainerBase:
             display.note('swa model saved')
 
         # log last metrics and end 
-        self._log(writer, eval_metrics, steps)
+        self._log(writer, eval_metrics, steps, mode='val')
         display.done(end='\n\n')
 
         """ end final evaluation """

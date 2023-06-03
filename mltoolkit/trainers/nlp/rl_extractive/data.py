@@ -198,7 +198,7 @@ class AllSides(Dataset):
 
 
 
-def set_columns(ds):
+def set_columns(ds: datasets.Dataset) -> datasets.Dataset:
     """
     renames dataset columns and removes those that aren't mentioned in the <trgt_columns> variable
 
