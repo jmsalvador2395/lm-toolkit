@@ -109,7 +109,9 @@ def set_defaults(cfg, keywords, debug=False):
 
     # set default optim parameters
     cfg.optim['lr'] = float(cfg.optim.get('lr', 1e-3))
+    cfg.optim['clip_max_norm'] = cfg.optim.get('clip_max_norm', None)
     cfg.optim['weight_decay'] = float(cfg.optim.get('weight_decay', 0))
+    cfg.optim['clip_norm_type'] = cfg.optim.get('clip_norm_type', 2.0)
     cfg.optim['swa_strat_is_linear'] = cfg.optim.get('swa_strat_is_linear', True)
     cfg.optim['swa_anneal_epochs'] = cfg.optim.get('swa_anneal_epochs', 5)
     cfg.optim['swa_lr'] = cfg.optim.get('swa_lr', 0.05)

@@ -23,6 +23,10 @@ optim :
     lr : .005
     # regularization penalty (default: 0)
     weight_decay : 0
+    # sets the gradient clip value. set to null to deactivate. (default: None)
+    clip_max_norm: 
+    # determines the type of norm to clip (default: 2)
+    clip_norm_type:
     # the epoch to begin SWA procedure. positive numbers specify the exact epoch. negative specifies n epochs from last
     swa_begin: -10
     # True uses linear LR strategy, False uses cosine
