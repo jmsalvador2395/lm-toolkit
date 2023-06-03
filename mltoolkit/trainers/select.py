@@ -26,7 +26,7 @@ def select(config_path, debug=False):
         'rl_extractive',
     ])
     cfg, _ = cfg_reader.load(config_path)
-    match cfg.model.get('name', None):
+    match cfg.general.get('trainer', None):
         case 'word2box':
             return TrainerWord2Box(config_path, debug=debug)
         case 'glove':

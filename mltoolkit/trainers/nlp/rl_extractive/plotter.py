@@ -40,11 +40,11 @@ def plot_rouge_history(hist, mode):
         img = np.array(fig.canvas.renderer.buffer_rgba())
         plt.close()
         
-        plots[f'{metric}/{mode}'] = img
+        plots[f'{metric}'] = img
     
     return plots
 
-def plot_reward_history(hist, mode):
+def plot_reward_history(hist, mode, stay_in_budget=False):
 
     # setup vars
     hist = Dataset.from_list(hist)
@@ -54,6 +54,13 @@ def plot_reward_history(hist, mode):
     alphas = [.5, .8, .5]
     styles = ['r-', 'b--', 'g-.']
     markers = ['.', '.', '.']
+
+    # plots only the base term if stay_in_budget is true
+    if stay_in_budget:
+        metrics = ['base term']
+        alphase = alphas[:1]
+        styles = styles[:1]
+        markers = markers[:1]
 
     fig, ax = setup_plot()
     for metric, alpha, style, marker in zip(metrics, alphas, styles, markers):
@@ -77,7 +84,7 @@ def plot_reward_history(hist, mode):
     plt.close()
 
     return {
-        f'reward/{mode}': img
+        f'reward': img
     }
 
 def setup_plot():

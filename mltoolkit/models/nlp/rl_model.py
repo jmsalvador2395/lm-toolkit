@@ -12,6 +12,7 @@ import numpy as np
 import argparse
 import torch.nn as nn
 from typing import Dict, List, Tuple, Callable, Iterable, Union
+from torch.distributions import Categorical
 
 # local imports
 from mltoolkit.models.pretrained.bert import ExtSummarizer
@@ -133,19 +134,6 @@ class MLDecoder(nn.Module):
 class RLModel(nn.Module):
     """Main RL model"""
 
-    """
-    def __init__(
-        self,
-        decd: nn.Module,
-        model_type: str = "distilbert",
-        permute_prob: float = 0.0,
-        n_docs: int = 2,
-        freeze_base: bool = True,
-        ckpt_dir: str=None,
-        *args,
-        **kwargs,
-    ):
-    """
     def __init__(self, cfg):
         super().__init__()
 
@@ -162,6 +150,8 @@ class RLModel(nn.Module):
         y_em_size = cfg.get('y_em_size', 256)
         decd_drop = cfg.get('decd_drop', .1)
         output_features = cfg.get('output_features', 2)
+        self.k = cfg.get('budget', 3)
+        self.stay_in_budget = cfg.get('stay_in_budget', False)
 
         # check check parameter values
         assert 1.0 >= permute_prob >= 0.0, "Prob is out of range [0, 1]"
@@ -170,7 +160,7 @@ class RLModel(nn.Module):
 
         self.permute_prob = permute_prob
         self.n_docs = n_docs
-        # checkpoint = torch.load(f'{ckpt_dir}/{model_type}_ext.pt', map_location='cpu')  # don't wanna litter
+
         orig_model = ExtSummarizer(
             checkpoint=torch.load(
                 ckpt_dir, map_location="cpu"
@@ -251,23 +241,23 @@ class RLModel(nn.Module):
         mask_cls = torch.cat(mask_cls_list, dim=1)
 
         """
-                After concatenating move all the zeros in mask to the side
-                Useful for decoder for computing  
-                Reasons to do it :
-                        1. Save a lot of computation (https://stackoverflow.com/questions/51030782/why-do-we-pack-the-sequences-in-pytorch#:~:text=And%20we%20do%20packing%20so,would%20affect%20the%20overall%20performance.)
-                        2. I won't have to add pad token to tag_embeds (in decoder)
-                           if not done, for input pad, we would predict 1 or 0
-                           whereas we explicitly want this to be pad.
-                           
-                1. PackedSequence not useful to use since we are using LSTM cell 
-                """
-        batch_sz, max_sents = mask_cls.shape
-        x_grid, y_grid = np.indices((batch_sz, max_sents))  # x, y indices of the grid
+        After concatenating move all the zeros in mask to the side
+        Useful for decoder for computing  
+        Reasons to do it :
+                1. Save a lot of computation (https://stackoverflow.com/questions/51030782/why-do-we-pack-the-sequences-in-pytorch#:~:text=And%20we%20do%20packing%20so,would%20affect%20the%20overall%20performance.)
+                2. I won't have to add pad token to tag_embeds (in decoder)
+                   if not done, for input pad, we would predict 1 or 0
+                   whereas we explicitly want this to be pad.
+                   
+        1. PackedSequence not useful to use since we are using LSTM cell 
+        """
+        N, S = mask_cls.shape
+        x_grid, y_grid = np.indices((N, S))  # x, y indices of the grid
 
         # Move all zero/pads to the end  # working
         mask_cls, m_idxs = move_zeros_to_end(mask_cls)
         sents_vec = sents_vec[x_grid, m_idxs, :].type_as(sents_vec)  # New and better
-        # sents_vec = sents_vec[torch.arange(batch_sz).unsqueeze(1), m_idxs, :].type_as(sents_vec)      # Old
+        # sents_vec = sents_vec[torch.arange(N).unsqueeze(1), m_idxs, :].type_as(sents_vec)      # Old
 
         # Remove the cols which are all zeros (from the end since zeros are at the end after previous step)
         # Note: use trim_zeros function (not available in torch)
@@ -277,8 +267,8 @@ class RLModel(nn.Module):
         sents_vec = self.ext_layer(sents_vec, mask_cls, my_flag=True)
 
         # After trimming y dim might change
-        _, max_sents = mask_cls.shape
-        x_grid, y_grid = np.indices((batch_sz, max_sents))
+        _, S = mask_cls.shape
+        x_grid, y_grid = np.indices((N, S))
 
         # permute prob - prob of shuffling the sentences (bag of sentences)
         permute = np.random.choice(
@@ -289,7 +279,7 @@ class RLModel(nn.Module):
             permute = True
         if permute:
             sent_counts = mask_cls.abs().sum(dim=1).tolist()
-            shuffled_grid = self._get_shuffled_idxs(sent_counts, max_sents)
+            shuffled_grid = self._get_shuffled_idxs(sent_counts, S)
             sents_vec = sents_vec[x_grid, shuffled_grid, :].type_as(sents_vec)
 
         log_softmax_scores = self.decoder(
@@ -304,7 +294,7 @@ class RLModel(nn.Module):
         rev_argsort = None
         if permute:
             # Note: Idea is double argsort but in efficinet way (Source - https://stackoverflow.com/a/28574015)
-            rev_argsort = np.empty((batch_sz, max_sents), dtype=np.intp)
+            rev_argsort = np.empty((N, S), dtype=np.intp)
             rev_argsort[x_grid, shuffled_grid] = y_grid
             log_softmax_orig_order = log_softmax_scores[x_grid, rev_argsort, :].type_as(
                 sents_vec
@@ -318,8 +308,26 @@ class RLModel(nn.Module):
         assert not torch.any(
             torch.isnan(log_softmax_scores)
         ), "Nans should not occur. After repermuting"
-        # return log_softmax_scores * mask_cls[:, :, None], mask_cls
-        return log_softmax_scores, mask_cls, shuffled_grid, rev_argsort
+
+
+        # sample actions
+        preds = \
+            Categorical(torch.exp(log_softmax_scores)).sample()
+
+        if self.stay_in_budget:
+            preds, firstk_mask, episode_lengths = get_firstk(
+                preds,
+                self.k,
+                shuffled_grid,
+                rev_argsort
+            )
+            mask_cls = firstk_mask
+        else:
+            mask_cls = mask_cls.bool()
+            episode_lengths = torch.sum(mask_cls, dim=-1)
+
+        return log_softmax_scores, preds, episode_lengths, mask_cls
+
 
     @staticmethod
     def _get_shuffled_idxs(sent_cts: list, max_sent_ct: int) -> np.ndarray:
@@ -353,6 +361,47 @@ class RLModel(nn.Module):
         )
         assert cond, "Mistake in non-empty mask creation"
         return non_empty_mask.bool()
+
+def get_firstk(preds, k=3, shuffled_grid=None, unshuffled_grid=None):
+
+
+    # set vars
+    dev = preds.device
+    N, S= preds.shape
+
+    # initialize mask array
+    firstk_mask = torch.full((N, S), True, device=dev)
+
+    # intialize array that keeps count of 1s for each episode in the batch
+    counts = torch.zeros(N, device=dev)
+
+    shuffled = True if shuffled_grid is not None else False
+    if shuffled:
+        x_grid, _ = np.indices((N, S))
+        shuffled_preds = preds[x_grid, shuffled_grid]
+
+    # iterate through the columns
+    for i in range(S):
+        # set element to False if k 1s have already been encountered
+        firstk_mask[:, i] = counts < k
+        if shuffled:
+            counts[shuffled_preds[:, i] == 1] += 1
+        else:
+            counts[preds[:, i] == 1] += 1
+
+    if shuffled:
+        firstk_mask = firstk_mask[x_grid, unshuffled_grid]
+
+    
+    # set all elements after first k to 0
+    preds = preds * firstk_mask
+
+    # compute episode lengths
+    episode_lengths = torch.sum(firstk_mask, dim=-1)
+    episode_lengths[episode_lengths == 0] = S
+
+    return preds, firstk_mask, episode_lengths
+
 
 
 def move_zeros_to_end(mask_cls: torch.Tensor) -> tuple:  # perfect

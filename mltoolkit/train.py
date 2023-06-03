@@ -30,7 +30,7 @@ def train(args):
     # set debugging variables
     if args.debug:
         os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-        display.debug('from {__file__}- CUDA_LAUNCH_BLOCKING has been set to 1')
+        display.debug(f'from {__file__}: CUDA_LAUNCH_BLOCKING has been set to 1')
 
     # select trainer and execute training
     trainer = trainers.select(config_path, debug=args.debug)

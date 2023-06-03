@@ -1,0 +1,50 @@
+general : 
+    # trainer name
+    trainer: "mnist"
+    # the RNG seed
+    seed : 125 
+    # tensorboard logging directory
+    logdir_base : "{{project_root}}/tensorboard" 
+    # note for the training run
+    note : "a quick note about this training run. this note will show up in tensorboard."
+    # directory of the training checkpoint to continue from
+    load_checkpoint: null
+
+model :
+    # where to save checkpoints (default: {{project_root}}/checkpoints)
+    ckpt_dir : "{{project_root}}/checkpoints"
+    # model device (default: cpu)
+    device : "cuda:1"
+    # decides how model evaluations are compared to save best model. True to keep higher evalation, False to keep lower
+    keep_higher_eval: True
+
+optim :
+    # optimizer learning rate (default: 1e-3)
+    lr : .005
+    # regularization penalty (default: 0)
+    weight_decay : 0
+    # the epoch to begin SWA procedure. positive numbers specify the exact epoch. negative specifies n epochs from last
+    swa_begin: -10
+    # True uses linear LR strategy, False uses cosine
+    swa_strat_is_linear: True
+    # SWA learning rate. recommended to keep high (default: 0.05)
+    swa_lr: 0.05
+    # amount of epochs to get to swa_lr from regular lr
+    swa_anneal_epochs: 5
+    # amount of training steps to run through to update batchnorm statistics. 
+    # set to "all" to go through an entire epoch  (default 0)
+    swa_bn_update_steps: "all"
+
+data : 
+    # used decide if data will be shuffled (default: True)
+    shuffle : True
+    # dataloader batch size (default: 32)
+    batch_size : 2048
+    # number of training epochs (default: 1)
+    num_epochs : 35
+    # amount of training steps before running through evaluation procedure
+    eval_freq : 50
+    # amount of training steps before logging to tensorboard
+    log_freq : 10
+    # used to decide on running final evaluation on test set at the end of training (not yet implemented)
+    using_test_loader: False
