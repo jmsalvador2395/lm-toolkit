@@ -84,7 +84,6 @@ class TrainerExample(TrainerBase):
 
     def eval_step(self, model: nn.Module, batch: T, mode: str):
 
-        loss = None
         metrics = {
             'example_scalar': None,
             'example_image': None,
@@ -92,7 +91,7 @@ class TrainerExample(TrainerBase):
             'example_scalars': None,
         }
 
-        return loss, metrics
+        return metrics
 
     def on_eval_end(self, metrics: Dataset, mode: str):
 

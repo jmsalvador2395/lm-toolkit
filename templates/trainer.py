@@ -155,8 +155,6 @@ class TrainerExample(TrainerBase):
                 accumulate these metrics into a Dataset object and will be used as input 
                 to on_eval_end() for final aggregation
         """
-        # compute loss
-        loss = None
 
         metrics = {
             'example_scalar': None,
@@ -165,7 +163,7 @@ class TrainerExample(TrainerBase):
             'example_scalars': None,
         }
 
-        return loss, metrics
+        return metrics
 
     def on_eval_end(self, metrics: Dataset, mode: str):
         """
