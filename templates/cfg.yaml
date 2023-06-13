@@ -1,7 +1,7 @@
 general : 
     # trainer name
     trainer: "mnist"
-    # the RNG seed
+    # the RNG seed. set to null for a random seed which will be noted in tensorboard.
     seed : 125 
     # tensorboard logging directory
     logdir_base : "{{project_root}}/tensorboard" 
