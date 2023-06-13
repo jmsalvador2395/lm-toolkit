@@ -97,6 +97,13 @@ class TrainerBase:
                     val,
                     step_number,
                 )
+        if 'text' in metrics:
+            for key, val in metrics['text'].items():
+                writer.add_text(
+                    f'{key}/{mode}',
+                    val,
+                    step_number,
+                )
 
     def _log_hparams(self, name, writer, cfg):
         cfg = cfg._asdict()
@@ -198,7 +205,9 @@ class TrainerBase:
         self.model = self.init_model()
         validate.is_assigned(self.model, 'self.model')
         if checkpoint is not None:
-            self.model.load_state_dict(checkpoint['model'])
+            self.model.load_state_dict(
+                checkpoint['model'].state_dict()
+            )
             display.note('loaded model weights from checkpoint')
 
         display.in_progress('printing model summary ...')
@@ -222,8 +231,12 @@ class TrainerBase:
         display.in_progress('initializing optimizer and lr scheduler ...')
         self.optimizer, self.scheduler = self.init_optimizer()
         if checkpoint is not None:
-            self.optimizer.load_state_dict(checkpoint['optimizer'])
-            self.scheduler.load_state_dict(checkpoint['scheduler'])
+            self.optimizer.load_state_dict(
+                checkpoint['optimizer'].state_dict()
+            )
+            self.scheduler.load_state_dict(
+                checkpoint['scheduler'].state_dict()
+            )
 
         validate.is_assigned(self.optimizer, 'self.optimizer')
         validate.is_assigned(self.scheduler, 'self.scheduler')

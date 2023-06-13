@@ -1,4 +1,5 @@
 from .nlp import (
     TransformerEncDec,
-    RLModel
+    RLModel,
+    SofsatExtractor,
 )

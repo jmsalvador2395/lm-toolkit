@@ -24,8 +24,8 @@ from mltoolkit.trainers.base import TrainerBase
 
 # task-specific modules
 from . import (
-    data, # handles the dataset and dataloaders
-    plotter # handles the plotting for tensorboard
+    data_module, # handles the dataset and dataloaders
+    plotter, # handles the plotting for tensorboard
 )
 
 # models
@@ -53,18 +53,18 @@ class TrainerRLExtractive(TrainerBase):
 
         # initialize reward computation model
         self.reward_model = \
-            RewardModel(cfg.model).to(cfg.model['reward_device'])
+            RewardModel(cfg).to(cfg.model['reward_device'])
         self.reward_model.eval()
 
         return model
 
-    def init_optimizer(self, model):
+    def init_optimizer(self):
 
         cfg = self.cfg
 
         # optimizer
         optimizer = torch.optim.Adam(
-            model.parameters(),
+            self.model.parameters(),
             lr=cfg.optim['lr'],
             betas=(
                 cfg.optim.get('beta1', .9),
@@ -95,7 +95,7 @@ class TrainerRLExtractive(TrainerBase):
 
         # retrieve dataloaders
         train_loader, val_loader = \
-            data.fetch_dataloaders(
+            data_module.fetch_dataloaders(
                 cfg,
                 self.tokenizer
             )
