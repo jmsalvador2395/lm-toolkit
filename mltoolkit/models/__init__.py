@@ -3,3 +3,7 @@ from .nlp import (
     RLModel,
     SofsatExtractor,
 )
+
+from .rl import (
+    ActorCriticMLP
+)

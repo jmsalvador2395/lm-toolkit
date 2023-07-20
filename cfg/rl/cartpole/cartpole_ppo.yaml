@@ -1,0 +1,45 @@
+general: 
+    trainer: "cartpole-ppo"
+    seed: 123
+    logdir_base: "{{project_root}}/tensorboard"
+    note: "test"
+
+model:
+    ckpt_dir: "{{project_root}}/checkpoints"
+    save_checkpoint: True
+    keep_higher_eval: True
+    #load_checkpoint: "/data/john/projects/mltoolkit/debug/ckpt/checkpoint.pt"
+
+    # model parameters
+    in_size: 4
+    hidden_size: 512
+    out_size: 2
+    dropout: 0.05
+    mlp_layers: 4
+    device: "cuda:3"
+
+optim:
+    lr: 5.0e-4
+    weight_decay: 5.0e-7
+    beta1: .9
+    beta2: .999
+    eps: 1.0e-8
+    clip_max_norm: 2.0
+
+    # optimizer scheduler
+    sched_step_size: 10
+    sched_gamma: 0.95
+
+    # loss function params
+    clip_epsilon: 0.1
+    discount: 0.95
+    c1: 0.5
+    c2: 1.0e-2
+
+data: 
+    loc: "{{project_root}}/data/all_sides/all_sides.csv"
+    batch_size: 1024
+    num_ppo_epochs: 4
+    num_epochs: 50
+    num_episodes: 118450 #2369 (number of samples)* 50 (number of epochs)
+    render_mode: null

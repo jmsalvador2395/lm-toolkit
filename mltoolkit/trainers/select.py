@@ -3,7 +3,6 @@ this contains the function used to select the appropriate trainer based off the 
 """
 # local imports
 from mltoolkit import cfg_reader
-from .example import TrainerExample
 from .cv.mnist import TrainerMNIST
 from .nlp import (
     TrainerAutoLM,
@@ -11,6 +10,11 @@ from .nlp import (
     TrainerRLExtractive,
     TrainerSofsatExtractiveRL,
     TrainerSofsatExtractiveSup,
+    TrainerSofsatRanking,
+)
+from .rl import (
+    TrainerAllSidesRanking,
+    TrainerCartpolePPO,
 )
 
 def select(config_path, debug=False):
@@ -46,6 +50,12 @@ def select(config_path, debug=False):
             return TrainerSofsatExtractiveRL(config_path, debug=debug)
         case 'sofsat-extractive-sup':
             return TrainerSofsatExtractiveSup(config_path, debug=debug)
+        case 'sofsat-ranking':
+            return TrainerSofsatRanking(config_path, debug=debug)
+        case 'all-sides-ranking':
+            return TrainerAllSidesRanking(config_path, debug=debug)
+        case 'cartpole-ppo':
+            return TrainerCartpolePPO(config_path, debug=debug)
         case _:
             raise ValueError(
                 'invalid model name. valid options are: \n\t' +

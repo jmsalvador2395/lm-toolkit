@@ -393,6 +393,8 @@ class TrainerBase:
             cfg.general["experiment_name"],
         ) = self.setup()
 
+        self.writer = writer
+
         # initialize checkpointing-related variables
         best_model_score = \
             -math.inf if cfg.model['keep_higher_eval'] else math.inf

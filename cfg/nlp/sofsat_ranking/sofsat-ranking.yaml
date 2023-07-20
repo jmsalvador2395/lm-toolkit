@@ -1,6 +1,6 @@
 general: 
-    trainer: "sofsat-extractive-rl"
-    seed: 122
+    trainer: "sofsat-ranking"
+    seed: 123
     logdir_base: "{{project_root}}/tensorboard"
     note: "test"
 
@@ -15,7 +15,6 @@ model:
     lstm_in_size: 1024
     hidden_size: 1024
     out_size: 2
-    num_layers: 2
     dropout: 0.1
     mlp_layers: 2
     device: "cuda:2"
@@ -24,11 +23,11 @@ model:
     reward_model: 'all-mpnet-base-v1'
     reward_device: "cuda:3"
     reward_batch_size: 100
-    reward_ver: 0
+    reward_ver: 1
     stay_in_budget: True
 
 optim:
-    lr: 5.0e-7
+    lr: 1.0e-6
     weight_decay: 5.0e-6
     beta1: .9
     beta2: .999
@@ -53,7 +52,7 @@ data:
     num_shards: 1
     cache_dir: "{{home}}/.cache/huggingface"
     shuffle: True
-    batch_size: 64
+    batch_size: 4
     num_epochs: 50
     eval_freq: 50
     log_freq: 10
@@ -66,3 +65,5 @@ data:
     embedder_batch_size: 100
     doc_model: "all-mpnet-base-v1"
     use_cls_embs: False
+    limit_sentences: True
+    max_sentences_per_doc: 25

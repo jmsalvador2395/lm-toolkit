@@ -40,19 +40,47 @@ from mltoolkit.utils import (
     tokenizers,
 )
 
-class TrainerSofsatExtractiveRL(TrainerBase):
+class TrainerSofsatRanking(TrainerBase):
     def __init__(self, config_path, debug=False):
         super().__init__(config_path, debug=debug)
 
     def init_model(self):
 
-        cfg = self.cfg
+        ############## assign variables from cfg ############## 
 
-        model = SofsatExtractor(cfg).to(self.dev)
+        cfg = self.cfg
+        
+        in_size = cfg.model['in_size']
+        out_size = cfg.model['out_size']
+        hidden_size = cfg.model['hidden_size']
+        dropout = cfg.model['dropout']
+        num_mlp_layers = cfg.model['mlp_layers']
+
+        #######################################################
+
+        # define model
+        mlp_layers = [nn.Linear(in_size, hidden_size)]
+
+        mlp_layers += [
+            nn.Linear(hidden_size, hidden_size),
+            nn.LayerNorm((hidden_size,)),
+            nn.ReLU(),
+            nn.Dropout(p=dropout),
+        ]*num_mlp_layers
+
+        mlp_layers.append(
+            nn.Linear(
+                hidden_size,
+                out_size,
+            )
+        )
+
+        model = nn.Sequential(*mlp_layers)
 
         # initialize reward computation model
         self.reward_model = \
             reward_model.RewardModel(cfg).to(cfg.model['reward_device'])
+
         self.reward_model.eval()
 
         return model
@@ -144,14 +172,11 @@ class TrainerSofsatExtractiveRL(TrainerBase):
 
         seq = batch.pop('sequence')
         seq_mask = batch['seq_mask']
-        N, S = seq_mask.shape
-        row, col = np.indices(seq_mask.shape)
 
         ##########################################
 
         # make predictions
         scores = model(seq)
-        """
         preds = Categorical(torch.exp(scores)).sample()
 
         # get probabilities that correspond to each prediction
@@ -160,23 +185,6 @@ class TrainerSofsatExtractiveRL(TrainerBase):
         picked_indices = col[
             (preds.detach().bool() * seq_mask).cpu().numpy()
         ]
-        """
-        log_probs = scores[..., -1]
-        masked_log_probs = log_probs.detach().clone()
-        masked_log_probs[~seq_mask] = float('-inf')
-
-        picked_indices = torch.argsort(
-            masked_log_probs,
-            dim=-1,
-            descending=True
-        )
-        picked_indices = picked_indices[:, :self.k]
-        preds = torch.zeros(
-            seq_mask.shape,
-            dtype=torch.bool,
-            device=self.dev,
-        )
-        preds[row[:, :self.k], picked_indices] = True
 
         # evaluate the episode to get reward, metrics and predicted documents
         reward, metrics, doc_preds = \
@@ -204,12 +212,6 @@ class TrainerSofsatExtractiveRL(TrainerBase):
             'loss': loss,
             'action probs': torch.exp(log_probs[seq_mask]).detach().cpu().numpy(),
             'extracted sentences': picked_indices,
-            'extracted sentences (normalized)': \
-                picked_indices/torch.sum(
-                    seq_mask,
-                    dim=-1,
-                    keepdim=True
-                ),
             'target docs': batch['intersection'],
             'predicted docs': doc_preds,
         })
@@ -244,7 +246,6 @@ class TrainerSofsatExtractiveRL(TrainerBase):
             histogram_metrics.update({
                 'action probs': metrics['action probs'],
                 'extracted sentences': metrics['extracted sentences'],
-                'extracted sentences (normalized)': metrics['extracted sentences (normalized)'],
             })
 
             # build categorized metric dictionary
@@ -302,7 +303,6 @@ class TrainerSofsatExtractiveRL(TrainerBase):
             'episode lengths',
             'action probs',
             'extracted sentences',
-            'extracted sentences (normalized)',
         ]
         histogram_metrics = {
             key: np.concatenate(ag_metrics[key]) 
