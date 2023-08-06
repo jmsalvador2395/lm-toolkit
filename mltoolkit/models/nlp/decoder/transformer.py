@@ -5,19 +5,21 @@ import numpy as np
 from torch import nn
 from torch.nn import functional as f
 from typing import List
+from torch.distributions import Categorical
 
 # local imports
 from mltoolkit.nn_modules import PositionalEncoding
 
-class AutoregressiveTransformerDecoder(nn.Module):
+class TransformerDecoder(nn.Module):
     
     def __init__(self, cfg):
-        super(AutoregressiveTransformerDecoder, self).__init__()
+        super(TransformerDecoder, self).__init__()
+
+        cfg = cfg.model
 
         # set defaults if they don't exist
         self.dev = cfg.get('device', ['cpu'])
-        V = cfg['vocab_size']
-        embedding_dim = cfg.get('embedding_dim', 512)
+        embedding_dim = cfg.get('embedding_dim', 768)
         num_decoder_layers = cfg.get('num_decoder_layers', 6)
         num_hidden_layers = cfg.get('num_hidden_layers', 1)
         nhead = cfg.get('nhead', 8)
@@ -25,6 +27,7 @@ class AutoregressiveTransformerDecoder(nn.Module):
         seq_len = cfg.get('seq_len', 512)
         mlp_dropout = cfg.get('mlp_dropout', 0.1)
         decoder_dropout = cfg.get('decoder_dropout', 0.1)
+        out_size = cfg.get('out_size', 10)
 
         if num_decoder_layers % len(self.dev) != 0:
             raise ValueError('transformer_layers should be divisible by number of devices in list')
@@ -35,12 +38,6 @@ class AutoregressiveTransformerDecoder(nn.Module):
             transformer_devs.append(
                 self.dev[step//cutoff]
             )
-
-        # embedding layer
-        self.emb = nn.Embedding(
-            V,
-            embedding_dim,
-        )
 
         self.pos = PositionalEncoding(
             embedding_dim,
@@ -76,36 +73,32 @@ class AutoregressiveTransformerDecoder(nn.Module):
                 )
             )
             nn.init.kaiming_uniform_(self.classifier[-1][0].weight)
-        self.classifier = nn.ModuleList(self.classifier)
 
-        self.proj = nn.Linear(
+        self.classifier.append(nn.Linear(
             dim_feed_forward,
-            V,
-        )
+            out_size
+        ))
 
-    def forward(self, input_ids, attn_mask):
-        N, S = input_ids.shape
-        # get embeddings
-        out = self.emb(input_ids)
+        self.mlp = nn.Sequential(*self.classifier)
+
+    def forward(self, embeddings, mask):
+
+        # for masking see https://stackoverflow.com/questions/62170439/difference-between-src-mask-and-src-key-padding-mask
+
+        N, S, E = embeddings.shape
 
         # apply positional encodings
-        out = self.pos(out)
+        scores = self.pos(embeddings)
 
-        attn_mask = \
-            torch.triu(torch.ones(S, S, dtype=torch.bool)).to(out.device)
-        attn_mask.fill_diagonal_(False)
-
-        out = self.decoder(
-            out,
-            out,
-            attn_mask,
-            attn_mask,
+        scores = self.decoder(
+            scores,
+            scores,
+            tgt_key_padding_mask=mask,
+            memory_key_padding_mask=mask,
         )
 
-        # get classification scores
-        for cls in self.classifier:
-            out = cls(out)
+        scores = self.mlp(scores)
 
-        out = self.proj(out)
+        dist = Categorical(logits=scores)
 
-        return out
+        return dist

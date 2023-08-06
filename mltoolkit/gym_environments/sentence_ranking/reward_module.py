@@ -15,6 +15,32 @@ from torch.nn import functional as F
 from mltoolkit.utils import (
     display
 )
+
+def make_buckets(scores, num_fives=2):
+    
+    tail_buckets = np.array([5]*num_fives)
+    
+    num_buckets_left = len(scores) - num_fives
+    samples_per_bucket = num_buckets_left // 5
+
+    middle_buckets = np.repeat(
+        np.arange(5),
+        samples_per_bucket
+    )
+
+    head_buckets = np.zeros(
+        len(scores)
+        - len(middle_buckets)
+        - len(tail_buckets)
+    )
+    
+    return np.concatenate((
+        head_buckets,
+        middle_buckets,
+        tail_buckets
+    ))
+        
+    
 def ranking_reward(ep_info, encoder, K=3, dev='cpu'):
 
     # compute scores for each document
@@ -27,12 +53,20 @@ def ranking_reward(ep_info, encoder, K=3, dev='cpu'):
         range(len(scores), 0, -1)
     )
 
-    # compute ndcg score
-    y_pred = np.zeros(len(scores))
-    y_pred[np.argsort(scores)] = np.arange(len(scores))
-    #y_pred = y_pred[::-1]
 
-    y_true = np.arange(len(scores))[::-1]
+    with_buckets = True
+    buckets = make_buckets(scores)
+
+    # compute ndcg score
+    y_true = np.zeros(len(scores))
+
+    if with_buckets:
+        y_true[np.argsort(scores)] = buckets
+        y_pred = buckets[::-1]
+
+    else:
+        y_true[np.argsort(scores)] = np.arange(len(scores))
+        y_pred = np.arange(len(scores))[::-1]
 
     y_pred = y_pred[np.newaxis]
     y_true = y_true[np.newaxis]
@@ -40,7 +74,9 @@ def ranking_reward(ep_info, encoder, K=3, dev='cpu'):
     ndcg_score = ndcg_score_fn(y_true, y_pred, k=K)
 
     # sum spearman and ndcg scores
-    reward = spearman_score.statistic + ndcg_score
+    #reward = ndcg_score + spearman_score.statistic
+    reward = ndcg_score
+    #reward = spearman_score.statistic
 
     return (
         reward, 

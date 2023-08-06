@@ -19,8 +19,8 @@ model:
     device: "cuda:3"
 
 optim:
-    lr: 5.0e-4
-    weight_decay: 5.0e-7
+    lr: 1.0e-4
+    weight_decay: 5.0e-5
     beta1: .9
     beta2: .999
     eps: 1.0e-8
@@ -31,15 +31,15 @@ optim:
     sched_gamma: 0.95
 
     # loss function params
-    clip_epsilon: 0.1
+    clip_epsilon: 5.0e-2
     discount: 0.95
     c1: 0.5
-    c2: 1.0e-2
+    c2: 5.0e-3
 
 data: 
     loc: "{{project_root}}/data/all_sides/all_sides.csv"
     batch_size: 1024
-    num_ppo_epochs: 4
+    num_ppo_epochs: 3
     num_epochs: 50
     num_episodes: 118450 #2369 (number of samples)* 50 (number of epochs)
     render_mode: null

@@ -11,6 +11,7 @@ from .nlp import (
     TrainerSofsatExtractiveRL,
     TrainerSofsatExtractiveSup,
     TrainerSofsatRanking,
+    TrainerSofsatRankingDCG,
 )
 from .rl import (
     TrainerAllSidesRanking,
@@ -52,6 +53,8 @@ def select(config_path, debug=False):
             return TrainerSofsatExtractiveSup(config_path, debug=debug)
         case 'sofsat-ranking':
             return TrainerSofsatRanking(config_path, debug=debug)
+        case 'sofsat-ranking-dcg':
+            return TrainerSofsatRankingDCG(config_path, debug=debug)
         case 'all-sides-ranking':
             return TrainerAllSidesRanking(config_path, debug=debug)
         case 'cartpole-ppo':

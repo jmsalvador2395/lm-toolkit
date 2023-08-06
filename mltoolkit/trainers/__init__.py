@@ -6,4 +6,5 @@ from .nlp import (
     TrainerAutoLM,
     TrainerRLExtractive,
     TrainerSofsatRanking,
+    TrainerSofsatRankingDCG,
 )

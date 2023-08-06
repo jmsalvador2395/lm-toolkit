@@ -246,6 +246,7 @@ class AllSidesRankingEnv(gym.Env):
         ep_info['target'] = ep_info['to_rank'].pop(0)
         ep_info['target_rank'] = 0
         ep_info['t'] = 0
+        ep_info['direction'] = ''
 
         pair0 = (
             ep_info['target'],
@@ -268,6 +269,7 @@ class AllSidesRankingEnv(gym.Env):
             'basic',
             'alternating',
             'alternating+',
+            'random'
         ]
         max_len = max(len_a, len_b)
 
@@ -410,6 +412,7 @@ class AllSidesRankingEnv(gym.Env):
         else:
             raise ValueError()
 
+    """
     def isort_step(self, action: int):
 
         ########### initialize return values ########### 
@@ -478,6 +481,128 @@ class AllSidesRankingEnv(gym.Env):
 
                 target = ep_info['to_rank'].pop(0)
                 ep_info['target'] = target
+
+        if not terminated:
+
+            # get sentence embeddings
+            s1 = ep_info['sentence_embs'][target]
+            s2 = ep_info['sentence_embs'][rankings[target_rank]]
+
+            # get next state
+            state = np.concatenate((
+                ep_info['a_emb'],
+                ep_info['b_emb'],
+                s1,
+                s2,
+            ))
+
+        else:
+            reward_flag = True
+
+        if reward_flag:
+            reward, result = self._compute_reward(self.ep_info)
+            info.update(result)
+
+        return (
+            state,
+            reward,
+            terminated,
+            trunc,
+            info,
+        )
+    """
+
+    def isort_step(self, action: int):
+
+        ########### initialize return values ########### 
+
+        state = np.zeros(768*4)
+        reward = 0
+        terminated = False
+        trunc = False
+        info = {
+            'end_of_epoch': False,
+        }
+
+        ################################################
+
+        ########### unpack episode vars ########### 
+
+        ep_info = self.ep_info
+
+        target = ep_info['target']
+        target_rank = ep_info['target_rank']
+        to_rank = ep_info['to_rank']
+        rankings = ep_info['rankings']
+
+        ############################################
+
+        # set flag to prepare next target
+        prepare_next_target = False
+        reward_flag = False
+
+        # action for saying target is greater than sentence at target_rank
+        if action == 0:
+
+            if ep_info['direction'] == 'right':
+
+                # insert target into ranked position and set flag to assign next target
+                self.ep_info['rankings'].insert(target_rank, target)
+                prepare_next_target = True
+
+ 
+            else:
+                ep_info['direction'] = 'left'
+            
+                # increment ranking
+                target_rank -= 1
+                ep_info['target_rank'] = target_rank
+
+                # check if target_rank is at the end of the rankings list
+                if target_rank == -1:
+                    ep_info['rankings'].insert(0, target)
+                    prepare_next_target = True
+
+        elif action == 1:
+
+            if ep_info['direction'] == 'left':
+
+                ep_info['rankings'].insert(target_rank, target)
+                prepare_next_target = True
+
+            else:
+
+                ep_info['direction'] = 'right'
+            
+                # increment ranking
+                target_rank += 1
+                ep_info['target_rank'] = target_rank
+
+                # check if target_rank is at the end of the rankings list
+                if target_rank == len(ep_info['rankings']):
+                    ep_info['rankings'].insert(target_rank, target)
+                    prepare_next_target = True
+
+                    #reward_flag = True if len(self.ep_info['rankings']) > self.K else False
+
+        if prepare_next_target:
+
+            # set terminated variable
+            terminated = (len(to_rank) == 0)
+
+            if terminated:
+                # check for end of epoch
+                if self.order_idx == len(self.ds[self.mode])-1:
+                    info['end_of_epoch'] = True
+                    self.epoch_reset = True
+
+            else:
+                # update ep_info
+                ep_info['target_rank'] = len(ep_info['rankings']) // 2
+
+                target = ep_info['to_rank'].pop(0)
+                ep_info['target'] = target
+                ep_info['direction'] = ''
 
         if not terminated:
 
