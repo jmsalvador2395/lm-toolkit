@@ -21,7 +21,7 @@ class TransformerDecoder(nn.Module):
         self.dev = cfg.get('device', ['cpu'])
         embedding_dim = cfg.get('embedding_dim', 768)
         num_decoder_layers = cfg.get('num_decoder_layers', 6)
-        num_hidden_layers = cfg.get('num_hidden_layers', 1)
+        mlp_layers = cfg.get('mlp_layers', 1)
         nhead = cfg.get('nhead', 8)
         dim_feed_forward = cfg.get('dim_feed_forward', 512)
         seq_len = cfg.get('seq_len', 512)
@@ -29,37 +29,27 @@ class TransformerDecoder(nn.Module):
         decoder_dropout = cfg.get('decoder_dropout', 0.1)
         out_size = cfg.get('out_size', 10)
 
-        if num_decoder_layers % len(self.dev) != 0:
-            raise ValueError('transformer_layers should be divisible by number of devices in list')
-        cutoff = num_decoder_layers // len(self.dev)
-        
-        transformer_devs = []
-        for step in range(num_decoder_layers):
-            transformer_devs.append(
-                self.dev[step//cutoff]
-            )
-
         self.pos = PositionalEncoding(
             embedding_dim,
         )
 
-        decoder_layer = nn.TransformerDecoderLayer(
+        decoder_layer = nn.TransformerEncoderLayer(
                 embedding_dim,
                 nhead,
                 dim_feed_forward,
                 dropout=decoder_dropout,
-                activation='gelu',
+                activation='relu',
                 batch_first=True,
             )
-        self.decoder = nn.TransformerDecoder(
+        self.decoder = nn.TransformerEncoder(
             decoder_layer,
             num_decoder_layers,
         )
 
-        self.classifier= []
-        for layer in range(num_hidden_layers):
+        classifier= []
+        for layer in range(mlp_layers):
             input_size = embedding_dim if layer == 0 else dim_feed_forward
-            self.classifier.append(
+            classifier.append(
                 nn.Sequential(
                     nn.Linear(
                         input_size,
@@ -72,14 +62,14 @@ class TransformerDecoder(nn.Module):
                     nn.Dropout(p=mlp_dropout),
                 )
             )
-            nn.init.kaiming_uniform_(self.classifier[-1][0].weight)
+            nn.init.kaiming_uniform_(classifier[-1][0].weight)
 
-        self.classifier.append(nn.Linear(
+        classifier.append(nn.Linear(
             dim_feed_forward,
             out_size
         ))
 
-        self.mlp = nn.Sequential(*self.classifier)
+        self.mlp = nn.Sequential(*classifier)
 
     def forward(self, embeddings, mask):
 
@@ -90,11 +80,17 @@ class TransformerDecoder(nn.Module):
         # apply positional encodings
         scores = self.pos(embeddings)
 
+        """
         scores = self.decoder(
             scores,
             scores,
             tgt_key_padding_mask=mask,
             memory_key_padding_mask=mask,
+        )
+        """
+        scores = self.decoder(
+            scores,
+            src_key_padding_mask=mask,
         )
 
         scores = self.mlp(scores)

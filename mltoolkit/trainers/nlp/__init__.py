@@ -7,3 +7,5 @@ from .sofsat_extractive_sum import (
     TrainerSofsatExtractiveRL,
     TrainerSofsatExtractiveSup,
 )
+from .sentence_decoding import TrainerSentenceDecoder
+from .text_autoenc import TrainerTextAutoencoder

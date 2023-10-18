@@ -7,4 +7,6 @@ from .nlp import (
     TrainerRLExtractive,
     TrainerSofsatRanking,
     TrainerSofsatRankingDCG,
+    TrainerSentenceDecoder,
+    TrainerTextAutoencoder,
 )

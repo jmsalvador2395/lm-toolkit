@@ -1,0 +1,1 @@
+from .sofsat_ranking_dcg import TrainerSofsatRankingDCG

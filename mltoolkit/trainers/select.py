@@ -12,6 +12,8 @@ from .nlp import (
     TrainerSofsatExtractiveSup,
     TrainerSofsatRanking,
     TrainerSofsatRankingDCG,
+    TrainerSentenceDecoder,
+    TrainerTextAutoencoder,
 )
 from .rl import (
     TrainerAllSidesRanking,
@@ -59,6 +61,10 @@ def select(config_path, debug=False):
             return TrainerAllSidesRanking(config_path, debug=debug)
         case 'cartpole-ppo':
             return TrainerCartpolePPO(config_path, debug=debug)
+        case 'sentence-decoding':
+            return TrainerSentenceDecoder(config_path, debug=debug)
+        case 'text-autoencoding':
+            return TrainerTextAutoencoder(config_path, debug=debug)
         case _:
             raise ValueError(
                 'invalid model name. valid options are: \n\t' +

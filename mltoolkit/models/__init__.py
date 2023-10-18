@@ -4,6 +4,8 @@ from .nlp import (
     SofsatExtractor,
     TransformerDecoder,
     AutoregressiveTransformerDecoder,
+    TransformerAutoencoder,
+    TextAutoencoder,
 )
 
 from .rl import (

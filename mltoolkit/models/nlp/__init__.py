@@ -6,3 +6,7 @@ from .decoder import (
     AutoregressiveTransformerDecoder,
     TransformerDecoder
 )
+from .autoenc import (
+    TransformerAutoencoder,
+    TextAutoencoder,
+)
