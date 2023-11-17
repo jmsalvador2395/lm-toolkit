@@ -35,6 +35,7 @@ def fetch_dataloaders(cfg):
     ds_save_dir = cfg.data.get('ds_save_dir', None)
     tokenizer = AutoTokenizer.from_pretrained(cfg.data['tokenizer_name'])
     max_seq_len = cfg.data['max_seq_len']
+    seed = cfg.general.get('seed', None)
 
     ######################################################################
 
@@ -46,10 +47,15 @@ def fetch_dataloaders(cfg):
     ds1 = datasets.load_dataset(
         'bookcorpus',
         cache_dir=cfg.data['cache_dir'],
-        #num_proc=num_workers
+        num_proc=num_workers
     )
-    ds1 = ds1['train'].train_test_split(train_size=cfg.data['train_test_split'])
+    ds1 = ds1['train'].train_test_split(
+        train_size=cfg.data['train_test_split'],
+        seed=seed,
+    )
+    ds = ds1
 
+    """
     ds2 = datasets.load_dataset(
         'wikitext',
         'wikitext-103-v1',
@@ -77,9 +83,10 @@ def fetch_dataloaders(cfg):
             'seq_len': max_seq_len,
         },
         remove_columns=['text'],
-        num_proc=num_workers,
+        #num_proc=num_workers,
     )
     ds = ds.with_format('torch')
+    """
 
     # define function for RNG in dataloaders
     def seed_worker(worker_id):
@@ -95,7 +102,7 @@ def fetch_dataloaders(cfg):
             #train_data,
             ds['train'],
             batch_size=train_batch_size,
-            collate_fn=collate_fn,
+            #collate_fn=collate_fn,
             shuffle=shuffle,
             num_workers=num_workers,
             pin_memory=pin_memory,
@@ -106,7 +113,7 @@ def fetch_dataloaders(cfg):
             #test_data,
             ds['test'],
             batch_size=val_batch_size,
-            collate_fn=collate_fn,
+            #collate_fn=collate_fn,
             shuffle=shuffle,
             num_workers=num_workers,
             pin_memory=pin_memory,
@@ -116,19 +123,16 @@ def fetch_dataloaders(cfg):
     )
 
 def token_map_fn(batch, **kwargs):
+
     if '' in batch['text']:
-        batch['text'] = [text for text in batch['text'] if text != '']
+        batch['text'] = list(filter(lambda text: text != '', batch['text']))
         if batch['text'] == []:
             return {'input_ids': [], 'attention_mask': []}
 
     # split sentences and filter out empty sentences
-    sentences = itertools.chain.from_iterable(
+    sentences = list(itertools.chain.from_iterable(
         [sent_tokenize(doc) for doc in batch['text']]
-    )
-    sentences = list(filter(lambda x: x != '', sentences))
-
-    if '' in sentences:
-        print('empty sentence found')
+    ))
 
     tokens = kwargs['tokenizer'](
         sentences,
@@ -137,6 +141,16 @@ def token_map_fn(batch, **kwargs):
         truncation=True,
         return_tensors='np'
     )
+
+    non_empty = np.sum(tokens['attention_mask'], axis=-1) != 2
+
+    # filter out empty sentences
+    if np.any(non_empty == False):
+
+        display.warning('empty sentence found')
+
+        tokens['input_ids'] = tokens['input_ids'][non_empty]
+        tokens['attention_mask'] = tokens['attention_mask'][non_empty]
 
     return tokens
 

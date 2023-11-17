@@ -25,7 +25,7 @@ model:
     deconv_kernel_sizes:
         - 33
     decode_style: "conv"
-    relu_after_conv: True
+    relu_after_expansion: False
 
 optim:
     lr: 3.0e-4

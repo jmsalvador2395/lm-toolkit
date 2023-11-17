@@ -216,6 +216,8 @@ class TrainerBase:
         # count and display learnable parameters
         params = self.model.parameters()
         learnable_params = sum(p.numel() for p in params if p.requires_grad)
+
+        params = self.model.parameters()
         unlearnable_params = sum(p.numel() for p in params if not p.requires_grad)
 
         display.note(

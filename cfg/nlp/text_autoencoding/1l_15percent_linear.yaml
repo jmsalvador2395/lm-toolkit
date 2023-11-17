@@ -24,8 +24,11 @@ model:
         - 256
     deconv_kernel_sizes:
         - 33
-    decode_style: "conv"
-    relu_after_conv: True
+    decode_style: "linear"
+    num_linear_expansion_vectors: 100
+    relu_after_expansion: False
+    pooling_method: "average"
+    freeze_encoder: True
 
 optim:
     lr: 3.0e-4

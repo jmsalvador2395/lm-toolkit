@@ -17,15 +17,19 @@ model:
     num_decoder_layers: 1
     mlp_layers: 4
     devices: 
-        - "cuda:1"
+        - "cuda:2"
     freeze_encoder: True
     deconv_sequence:
         #- 512
         - 256
     deconv_kernel_sizes:
         - 33
-    decode_style: "conv"
-    relu_after_conv: True
+    decode_style: "linear"
+    num_linear_expansion_vectors: 100
+    relu_after_expansion: False
+    pt_encoder: "bert-base-uncased"
+    pooling_method: "attention"
+    freeze_encoder: True
 
 optim:
     lr: 3.0e-4
@@ -50,7 +54,7 @@ data:
     num_proc: 24
     pin_memory: False
     num_shards: 1
-    cache_dir: "{{project_root}}/data/cache"
+    cache_dir: "{{home}}/cache"
     ds_save_dir: "{{project_root}}/data/text_ae"
     shuffle: True
     train_batch_size: 64
@@ -60,7 +64,6 @@ data:
     log_freq: 2000
     inference_freq: 300
     train_test_split: .999
-    tokenizer_name: "sentence-transformers/all-mpnet-base-v2"
+    tokenizer_name: "bert-base-uncased"
     max_seq_len: 256
-    do_mask: True
     mask_prob: .15

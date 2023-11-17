@@ -1,10 +1,11 @@
 # external imports
 import torch
 import numpy as np
+import transformers
 from torch import nn
 from torch.nn import functional as f
 from typing import List
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import SentenceTransformer
 
 # local imports
@@ -338,6 +339,10 @@ class TextAutoencoder(nn.Module):
         deconv_kernels = cfg.model.get('deconv_kernel_sizes', [5, 9, 33])
         decode_style = cfg.model.get('decode_style', None)
         pos_encoding_type = cfg.model.get('pos_encoding_type', 'learned')
+        relu_after_expansion = cfg.model.get('relu_after_expansion', True)
+        n_expansion_vecs = cfg.model.get('num_linear_expansion_vectors', 128)
+        freeze_encoder = cfg.model.get('freeze_encoder', False)
+        
 
         # persistent vars
         self.max_seq_len = cfg.data['max_seq_len']
@@ -345,31 +350,79 @@ class TextAutoencoder(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(cfg.data['tokenizer_name'])
         self.decode_style = decode_style
         self.pos_encoding_type = pos_encoding_type
+        self.n_expansion_vecs = n_expansion_vecs 
+        self.embedding_dim = embedding_dim
+        self.pt_encoder = cfg.model.get('pt_encoder', None)
+        self.pooling_method = cfg.model.get('pooling_method', 'average')
 
         #######################################################
 
-        # initialize decoder
-        encoder_layer = nn.TransformerEncoderLayer(
-            embedding_dim,
-            nhead,
-            dim_feed_forward,
-            dropout=dropout,
-            activation='gelu',
-            batch_first=True,
-        )
+        # set start and end tokens for decoding
+        if cfg.data['tokenizer_name'] == 'bert-base-uncased':
+            self.start_token = self.tokenizer.cls_token_id
+            self.end_token = self.tokenizer.sep_token_id
+        elif cfg.data['tokenizer_name'] == 'sentence-transformers/all-mpnet-base-v2':
+            self.start_token = self.tokenizer.bos_token_id
+            self.end_token = self.tokenizer.eos_token_id
+        else:
+            raise ValueError('cannot determine start/end tokens for text generation')
 
-        self.encoder = nn.TransformerEncoder(
+
+        # initialize encoder
+        if self.pt_encoder is None:
+            encoder_layer = nn.TransformerEncoderLayer(
+                embedding_dim,
+                nhead,
+                dim_feed_forward,
+                dropout=dropout,
+                activation='gelu',
+                batch_first=True,
+            )
+
+            self.encoder = nn.TransformerEncoder(
                 encoder_layer,
                 num_encoder_layers,
-        )
+            )
 
-        #initialize embeddings and positional encodings
-        self.enc_embeddings = nn.Embedding(
-            V,
-            embedding_dim,
-            padding_idx = pad_id
-        )
-        #initialize embeddings and positional encodings
+
+            #initialize encoder embeddings and positional encodings
+            self.enc_embeddings = nn.Embedding(
+                V,
+                embedding_dim,
+                padding_idx = pad_id
+            )
+
+            if self.pos_encoding_type == 'sinusoid':
+                self.enc_pos = PositionalEncoding(
+                    embedding_dim,
+                )
+            elif self.pos_encoding_type == 'learned':
+                self.enc_pos = nn.Parameter(
+                    torch.randn((self.max_seq_len, embedding_dim))
+                )
+            else:
+                pos_enc_types = ['learned', 'sinusoid']
+                display.error(f'invalid positional encoding type. must be one of {pos_enc_types}')
+                raise ValueError()
+
+        else:
+            self.encoder = AutoModel.from_pretrained(self.pt_encoder)
+            if self.encoder.config.hidden_size != embedding_dim:
+                raise ValueError("hidden_size of pre-trained encoder conflicts with requested embedding_dim")
+
+        if freeze_encoder:
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+
+        if self.pooling_method == 'attention':
+            self.pooler = nn.MultiheadAttention(
+                embedding_dim,
+                num_heads=1,
+                dropout=dropout,
+                batch_first=True,
+            )
+
+        #initialize decoder embeddings and positional encodings
         self.dec_embeddings = nn.Embedding(
             V,
             embedding_dim,
@@ -377,16 +430,10 @@ class TextAutoencoder(nn.Module):
         )
 
         if self.pos_encoding_type == 'sinusoid':
-            self.enc_pos = PositionalEncoding(
-                embedding_dim,
-            )
             self.dec_pos = PositionalEncoding(
                 embedding_dim,
             )
         elif self.pos_encoding_type == 'learned':
-            self.enc_pos = nn.Parameter(
-                torch.randn((self.max_seq_len, embedding_dim))
-            )
             self.dec_pos = nn.Parameter(
                 torch.randn((self.max_seq_len, embedding_dim))
             )
@@ -405,7 +452,8 @@ class TextAutoencoder(nn.Module):
                 deconv_seq[1:],
                 deconv_kernels
             ):
-                deconv.append(nn.Sequential(
+                if relu_after_expansion:
+                    deconv.append(nn.Sequential(
                         nn.Conv1d(
                             in_channels,
                             out_channels,
@@ -414,8 +462,17 @@ class TextAutoencoder(nn.Module):
                             padding=(kernel-1)//2,
                         ),
                         nn.ReLU(),
-                    )
-                )
+                    ))
+                else:
+                    deconv.append(nn.Sequential(
+                        nn.Conv1d(
+                            in_channels,
+                            out_channels,
+                            kernel,
+                            stride=1,
+                            padding=(kernel-1)//2,
+                        )
+                    ))
             deconv.append(nn.Linear(
                 embedding_dim,
                 embedding_dim, 
@@ -430,8 +487,28 @@ class TextAutoencoder(nn.Module):
         elif decode_style == 'add':
             breakpoint()
 
+        elif decode_style == 'linear':
+
+            if relu_after_expansion:
+                self.lin_expansion = nn.Sequential(
+                    nn.Linear(
+                        embedding_dim,
+                        embedding_dim*n_expansion_vecs
+                    ),
+                    nn.ReLU(),
+                    nn.Linear(
+                        embedding_dim*n_expansion_vecs,
+                        embedding_dim*n_expansion_vecs,
+                    )
+                )
+            else:
+                self.lin_expansion = nn.Linear(
+                    embedding_dim,
+                    embedding_dim*n_expansion_vecs
+                )
+
         else:
-            styles = ['conv', 'gate', 'add']
+            styles = ['conv', 'gate', 'add', 'linear']
             display.error(f'invalid argument for decode_style. style should be one of {styles}')
             raise ValueError()
 
@@ -452,55 +529,98 @@ class TextAutoencoder(nn.Module):
 
         self.linear = nn.Linear(dim_feed_forward, V)
 
-    def forward(self, src_tokens, src_pad_mask,  tgt_tokens, tgt_pad_mask):
+    def forward(self, tokens, pad_mask, mask_prob=0):
 
-        dev = src_tokens.device
+        dev = tokens.device
 
-        encodings = self.forward_encode(src_tokens, src_pad_mask)
-        scores = self.forward_decode(encodings, tgt_tokens, tgt_pad_mask)
+        enc_tokens = tokens
+        enc_mask = pad_mask
+
+        # masking procedure
+        if mask_prob > 0:
+            enc_tokens = tokens.clone()
+            #enc_mask = pad_mask.clone()
+
+            noise_mask = torch.rand(tokens.shape) <= mask_prob
+            
+            enc_tokens[noise_mask] = self.tokenizer.mask_token_id
+            enc_tokens[enc_mask != 1] = self.tokenizer.pad_token_id
+
+        # encode (pooling takes place in this function)
+        encodings = self.forward_encode(enc_tokens, pad_mask)
+
+        # decode (feature expansion takes place in this function)
+        pad_mask = (pad_mask == 0)
+        scores = self.forward_decode(encodings, tokens, pad_mask)
 
         return scores
 
-    def forward_encode(self, src_tokens, src_pad_mask):
-        
-        dev = self.enc_embeddings.weight.device
+    def forward_encode(self, tokens, pad_mask):
 
-        src_embeddings = self.enc_embeddings(src_tokens)
-        if self.pos_encoding_type == 'sinusoid':
-            src_embeddings = self.enc_pos(src_embeddings)
-        elif self.pos_encoding_type == 'learned':
-            src_embeddings += self.enc_pos
+        if self.pt_encoder is None:
+            
+            dev = self.dec_embeddings.weight.device
+            pad_mask = (pad_mask != self.tokenizer.pad_token_id)
+
+            src_embeddings = self.enc_embeddings(tokens)
+            if self.pos_encoding_type == 'sinusoid':
+                src_embeddings = self.enc_pos(src_embeddings)
+            elif self.pos_encoding_type == 'learned':
+                src_embeddings += self.enc_pos
+            else:
+                display.error('invalid positional encoding type')
+                raise ValueError()
+
+            encodings = self.encoder(
+                src_embeddings,
+                src_key_padding_mask=pad_mask
+            )
+
+            # for some reasong the encoder reduces the diensions so i'm padding the output encodings
+            N, S, E = encodings.shape
+            if S < self.max_seq_len:
+                padding = torch.zeros((N, self.max_seq_len-S, E), device=dev)
+                encodings = torch.hstack((encodings, padding))
+            pooler_output = None
         else:
-            display.error('invalid positional encoding type')
-            raise ValueError()
+            encoder_output = self.encoder(tokens, pad_mask)
 
-        encodings = self.encoder(
-            src_embeddings,
-            src_key_padding_mask=src_pad_mask
-        )
+            encodings = encoder_output['last_hidden_state']
+            pooled_output = encoder_output['pooler_output']
 
-        # for some reasong the encoder reduces the diensions so i'm padding the output encodings
-        N, S, E = encodings.shape
-        if S < self.max_seq_len:
-            padding = torch.zeros((N, self.max_seq_len-S, E)).to(dev)
-            encodings = torch.hstack((encodings, padding))
+        ########### pooling section ########### 
 
-        # take mean of encodings to get sentence embeddings
-        encodings.masked_fill_(src_pad_mask[:, :, None], 0)
-        encodings = torch.mean(encodings, dim=-2)
+
+        if self.pooling_method == 'average':
+            # take mean of encodings to get sentence embeddings
+            encodings.masked_fill_(pad_mask[:, :, None], 0)
+            encodings = torch.mean(encodings, dim=-2)
+
+        elif self.pooling_method == 'attention':
+            encodings = self.pooler(
+                pooled_output[:, None, :],
+                encodings,
+                encodings,
+                key_padding_mask=(pad_mask == 0),
+                need_weights=False,
+            )[0]
+            encodings = encodings[:, 0, :]
 
         return encodings
 
 
-    def forward_decode(self, encodings, tgt_tokens, tgt_pad_mask):
+    def forward_decode(self, encodings, tokens, pad_mask):
         # for masking see https://stackoverflow.com/questions/62170439/difference-between-src-mask-and-src-key-padding-mask
 
-        dev = self.enc_embeddings.weight.device
+        dev = encodings.device
 
         if self.decode_style == 'conv':
             # up-conv and pad
             encodings = encodings[:, None, :]
             mem = self.deconv(encodings)
+        elif self.decode_style == 'linear':
+            mem = self.lin_expansion(encodings)
+            mem = mem.reshape((-1, self.n_expansion_vecs, self.embedding_dim))
         else:
             # TODO create section for gating
             breakpoint()
@@ -509,17 +629,18 @@ class TextAutoencoder(nn.Module):
         N, S_enc, E = mem.shape
         mem_padding = torch.full(
             (N, self.max_seq_len-S_enc, E), 
-            self.tokenizer.pad_token_id
-        ).to(dev)
+            self.tokenizer.pad_token_id,
+            device=dev,
+        )
         
         mem = torch.hstack((mem, mem_padding))
 
         # create mask for up-convolutional encodings
-        mem_pad_mask = torch.ones(N, self.max_seq_len, dtype=torch.bool).to(dev)
+        mem_pad_mask = torch.ones(N, self.max_seq_len, dtype=torch.bool, device=dev)
         mem_pad_mask[:, :S_enc] = False
 
         # get decoder embeddings
-        dec_embeddings = self.dec_embeddings(tgt_tokens)
+        dec_embeddings = self.dec_embeddings(tokens)
 
         # apply positional encodings
         if self.pos_encoding_type == 'sinusoid':
@@ -538,7 +659,7 @@ class TextAutoencoder(nn.Module):
             mem,
             tgt_mask=causal_attn_mask,
             #memory_mask=causal_attn_mask.to(dev),
-            tgt_key_padding_mask=tgt_pad_mask,
+            tgt_key_padding_mask=pad_mask,
             memory_key_padding_mask=mem_pad_mask,
         )
 
@@ -554,20 +675,19 @@ class TextAutoencoder(nn.Module):
             
         """
 
-        dev = self.enc_embeddings.weight.device
+        dev = self.dec_embeddings.weight.device
 
         tokens = self.tokenizer(
             src_text,
-            max_length=self.max_seq_len+1,
+            max_length=self.max_seq_len,
             padding='max_length',
             truncation=True,
             return_tensors='pt'
         )
         tokens = tokens.to(dev)
 
-        input_ids = tokens['input_ids'][:, 1:].clone()
-        attn_mask = ~tokens['attention_mask'][:, 1:].to(torch.bool).clone()
-        attn_mask[input_ids == self.tokenizer.eos_token_id] == True
+        input_ids = tokens['input_ids']
+        attn_mask = tokens['attention_mask']
         
         with torch.no_grad():
             encodings = self.forward_encode(input_ids, attn_mask)
@@ -576,7 +696,7 @@ class TextAutoencoder(nn.Module):
 
     def decode(self, encodings, skip_special_tokens=True):
     
-        dev = self.enc_embeddings.weight.device
+        dev = self.dec_embeddings.weight.device
         N = len(encodings)
 
         # initialize the tensor of tokens with bos token at [:, 0] and pad everywhere else
@@ -585,8 +705,7 @@ class TextAutoencoder(nn.Module):
             self.tokenizer.pad_token_id,
             device=dev
         )
-        pred_tokens = pred_tokens.to(dev)
-        pred_tokens[:, 0] = self.tokenizer.bos_token_id
+        pred_tokens[:, 0] = self.start_token
 
         pred_pad_mask = torch.ones(pred_tokens.shape, dtype=torch.bool, device=dev)
 
@@ -594,7 +713,7 @@ class TextAutoencoder(nn.Module):
         # keep track of whether an eos token is generated for each text sample
         eos_indices = torch.full((N,), -1)
 
-        eos_token = self.tokenizer.eos_token_id
+        eos_token = self.end_token
         pad_flags = torch.ones((N,), dtype=torch.bool)
 
         # run inference loop

@@ -168,14 +168,25 @@ class TrainerTextAutoencoder(TrainerBase):
 
         cfg = self.cfg
         max_seq_len = cfg.data['max_seq_len']
-        do_mask = cfg.data.get('do_mask', False)
         mask_prob = cfg.data.get('mask_prob', .01)
 
         #############################
 
-        input_ids = batch['input_ids'].to(self.devs[0])
-        pad_mask = batch['attention_mask'].to(self.devs[0])
+        tokens = self.tokenizer(
+            batch['text'],
+            add_special_tokens=True,
+            max_length=max_seq_len+1,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
+        tokens = tokens.to(self.devs[0])
 
+        input_ids = tokens['input_ids']
+        attn_mask = tokens['attention_mask']
+
+
+        """
         pad_mask = ~pad_mask.to(torch.bool)
 
         src_ids, src_mask = (
@@ -183,14 +194,6 @@ class TrainerTextAutoencoder(TrainerBase):
             pad_mask[:, 1:].clone()
         )
         src_mask[src_ids == self.tokenizer.eos_token_id] = True
-
-        # masking procedure
-        if do_mask:
-            noise_mask = torch.rand(src_ids.shape) <= mask_prob
-            
-            # mask tokens and then re-pad using pad_mask
-            src_ids[noise_mask] = self.tokenizer.mask_token_id
-            src_ids[src_mask] = self.tokenizer.pad_token_id
 
         tgt_ids, tgt_mask = input_ids[:, :max_seq_len], pad_mask[:, :max_seq_len]
         label_ids, label_mask = input_ids[:, 1:], ~pad_mask[:, 1:]
@@ -202,6 +205,20 @@ class TrainerTextAutoencoder(TrainerBase):
             tgt_ids,
             tgt_mask
         )
+        """
+
+        src_ids, src_mask = (
+            input_ids[:, :-1].clone(),
+            attn_mask[:, :-1].clone()
+        )
+
+        label_ids, label_mask = (
+            input_ids[:, 1:].clone(),
+            attn_mask[:, 1:].clone()
+        )
+        label_mask = (label_mask != 0)
+
+        scores = model(src_ids, src_mask, mask_prob)
 
         # compute loss
         loss_fn = nn.CrossEntropyLoss()
@@ -211,8 +228,6 @@ class TrainerTextAutoencoder(TrainerBase):
         scores = scores[label_mask]
         label_ids = label_ids[label_mask]
 
-        if self.step == 98140:
-            breakpoint()
         if torch.any(torch.isnan(scores)):
             breakpoint()
 
@@ -238,69 +253,7 @@ class TrainerTextAutoencoder(TrainerBase):
         }
 
         return loss, metrics
-
-    def inference_step(self, model, batch, mode='val'):
         
-        #_, metrics = self.step(model, batch, mode=mode)
-
-        N = len(batch['overlap'])
-
-        all_sents = batch['overlap'] + batch['s1'] + batch['s2']
-
-        encodings = model.encode(all_sents)
-        encodings = encodings.reshape((N, 3, -1))
-        
-        middle = (encodings[:, 1] + encodings[:, 2]) / 2
-        middle = middle[:, None, :]
-
-        middle_long =  middle*1.01
-        middle_short = middle*0.99
-
-        encodings = torch.hstack((
-            encodings,
-            middle,
-            middle_long,
-            middle_short
-        ))
-
-        groups = [
-            'overlap',
-            's1',
-            's2',
-            'middle',
-            'long_middle',
-            'short_middle'
-        ]
-
-        #encodings = encodings.reshape((N*6, -1))
-        #decodings = model.decode(encodings)
-
-        decodings = {}
-
-        for i, group in enumerate(groups):
-            decodings[group] = model.decode(
-                encodings[:, i]
-            )
-
-        table = md_table(batch, decodings, groups)
-
-        metrics = {}
-
-        bos_token = self.tokenizer.bos_token
-        eos_token = self.tokenizer.eos_token
-
-        # remove start token
-        self.pred_sents += [
-            sent[len(bos_token):-len(eos_token)] if sent.endswith(eos_token)
-            else sent[len(bos_token)]
-            for sent in rebuilt_sents
-        ]
-        rouge_scores = self.evaluate_rouge(batch, rebuilt_sents)
-
-        metrics.update(rouge_scores)
-
-        return metrics
-
     def evaluate_rouge(self, references, preds):
         scorer = RougeScorer(['rouge1', 'rouge2', 'rougeL'])
 

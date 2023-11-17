@@ -24,8 +24,12 @@ model:
         - 256
     deconv_kernel_sizes:
         - 33
-    decode_style: "conv"
-    relu_after_conv: True
+    decode_style: "linear"
+    num_linear_expansion_vectors: 100
+    relu_after_expansion: False
+    pt_encoder: "bert-base-uncased"
+    pooling_method: "attention"
+    freeze_encoder: True
 
 optim:
     lr: 3.0e-4
@@ -60,7 +64,7 @@ data:
     log_freq: 2000
     inference_freq: 300
     train_test_split: .999
-    tokenizer_name: "sentence-transformers/all-mpnet-base-v2"
+    tokenizer_name: "bert-base-uncased"
     max_seq_len: 256
     do_mask: True
     mask_prob: .15
