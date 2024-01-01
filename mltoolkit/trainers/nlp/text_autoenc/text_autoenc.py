@@ -25,7 +25,6 @@ from mltoolkit.trainers.base import TrainerBase
 # task-specific modules
 from . import (
     data_module, # handles the dataset and dataloaders
-    plotter, # handles the plotting for tensorboard
 )
 
 # models

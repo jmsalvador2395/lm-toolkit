@@ -32,7 +32,7 @@ model:
     freeze_encoder: False
 
 optim:
-    lr: 4.0e-4
+    lr: 2.0e-4
     weight_decay: 3.0e-6
     beta1: .9
     beta2: .999
