@@ -29,11 +29,10 @@ def load(path_str: str, debug=False):
     }
 
     base_cfg = {
-        'general' : {},
-        'model' : {},
-        'optim' : {},
-        'task' : {},
-        'data' : {},
+        'paths': {},
+        'general': {},
+        'params': {},
+        'search_params': {},
     }
     categories = base_cfg.keys()
 
@@ -57,13 +56,13 @@ def load(path_str: str, debug=False):
     if debug:
         debug_dir = f'{files.project_root()}/debug'
 
-        cfg.general['log_dir'] = \
+        cfg.paths['log_dir'] = \
             debug_dir \
             + f'/tensorboard/{cfg.general["experiment_name"]}' 
-        display.debug(f'log dir set to {cfg.general["log_dir"]}')
+        display.debug(f'log dir set to {cfg.paths["log_dir"]}')
 
-        cfg.model['ckpt_dir'] = debug_dir + '/ckpt'
-        display.debug(f'checkpoint directory set to {cfg.model["ckpt_dir"]}')
+        cfg.paths['ckpt_dir'] = debug_dir + '/ckpt'
+        display.debug(f'checkpoint directory set to {cfg.paths["ckpt_dir"]}')
 
 
     return cfg, keywords
@@ -71,7 +70,7 @@ def load(path_str: str, debug=False):
 def set_defaults(cfg, keywords, debug=False):
     # set experiment name
     cfg.general['experiment_name'] = \
-        f'{keywords["timestamp"]}-{cfg.general["trainer"]}'
+        f'{keywords["timestamp"]}-{cfg.general["task"]}'
 
     # set general parameters
     cfg.general['seed'] = cfg.general.get(
@@ -80,59 +79,47 @@ def set_defaults(cfg, keywords, debug=False):
     )
 
     # set tensorboard logging directory
-    cfg.general['log_dir'] = cfg.general.get(
+    cfg.paths['log_dir'] = cfg.general.get(
         'logdir_base',
         f'{files.project_root()}/tensorboard'
     ).rstrip('/') + f'/{cfg.general["experiment_name"]}'
 
-    cfg.general.pop('logdir_base')
+    cfg.paths.pop('logdir_base')
     cfg.general['load_checkpoint'] = \
-        cfg.model.get(
+        cfg.general.get(
             'load_checkpoint',
             None
         )
 
     # set default model parameters
-    cfg.model['device'] = cfg.model.get('device', 'cpu')
-    cfg.model['ckpt_dir'] = (
-        cfg.model.get(
+    cfg.params['device'] = cfg.params.get('device', 'cpu')
+    cfg.paths['ckpt_dir'] = (
+        cfg.paths.get(
             'ckpt_dir', 
             f'files.get_project_root()/checkpoints'
         ).rstrip('/') + \
         f'/{cfg.general["experiment_name"]}'
     )
-    cfg.model['keep_higher_eval'] = \
-        cfg.model.get(
-            'keep_higher_eval',
-            True
-        )
 
     # set default optim parameters
-    cfg.optim['lr'] = float(cfg.optim.get('lr', 1e-3))
-    cfg.optim['clip_max_norm'] = cfg.optim.get('clip_max_norm', None)
-    cfg.optim['weight_decay'] = float(cfg.optim.get('weight_decay', 0))
-    cfg.optim['clip_norm_type'] = cfg.optim.get('clip_norm_type', 2.0)
-    cfg.optim['swa_strat_is_linear'] = cfg.optim.get('swa_strat_is_linear', True)
-    cfg.optim['swa_anneal_epochs'] = cfg.optim.get('swa_anneal_epochs', 5)
-    cfg.optim['swa_lr'] = cfg.optim.get('swa_lr', 0.05)
-    cfg.optim['swa_bn_update_steps'] = cfg.optim.get('swa_bn_update_steps', 0)
+    cfg.params['lr'] = float(cfg.params.get('lr', 1e-3))
+    cfg.params['clip_max_norm'] = cfg.params.get('clip_max_norm', None)
+    cfg.params['weight_decay'] = float(cfg.params.get('weight_decay', 0))
+    cfg.params['clip_norm_type'] = cfg.params.get('clip_norm_type', 2.0)
 
     # set default data parameters if they don't exist
-    cfg.data['num_epochs'] = cfg.data.get('num_epochs', 1)
-    cfg.data['shuffle'] = cfg.data.get('shuffle', True)
-    cfg.data['batch_size'] = cfg.data.get('batch_size', 32)
-    cfg.data['eval_freq'] = cfg.data.get('eval_freq', 1000)
-    cfg.data['log_freq'] = cfg.data.get('log_freq', 1000)
-    cfg.data['using_test_loader'] = cfg.data.get('using_test_loader', False)
-
-    # set variable-dependent default values
-    cfg.optim['swa_begin'] = cfg.optim.get('swa_begin', cfg.data['num_epochs'])
+    cfg.params['num_epochs'] = cfg.params.get('num_epochs', 1)
+    cfg.params['shuffle'] = cfg.params.get('shuffle', True)
+    cfg.params['batch_size'] = cfg.params.get('batch_size', 32)
+    cfg.params['eval_freq'] = cfg.params.get('eval_freq', 1000)
+    cfg.params['log_freq'] = cfg.params.get('log_freq', 1000)
+    cfg.params['using_test_loader'] = cfg.params.get('using_test_loader', False)
 
     return cfg
 
 def check_required(cfg):
-    # check if trainer is assigned
+    # check if task is assigned
     try:
-        cfg.general['trainer']
+        cfg.general['task']
     except Exception as e:
-        display.error('config parameter cfg.general[\'trainer\'] is not set')
+        display.error('config parameter cfg.general[\'task\'] is not set')

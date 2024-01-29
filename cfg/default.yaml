@@ -1,0 +1,49 @@
+paths:
+  logdir_base: "{{project_root}}/tensorboard"
+  ckpt_dir: "{{project_root}}/checkpoints"
+  cache_dir: "{{project_root}}/data/cache"
+  
+general: 
+  task: "mnist_mlp"
+  seed: 125
+  note: "a quick note about this training run. this note will show up in tensorboard."
+  load_checkpoint: null
+
+params:
+  # model params
+  in_size: 784
+  hidden_dim: 500
+  device: "cuda:1"
+  dropout: 0.10
+  num_classes: 10
+  keep_higher_eval: True
+
+  # optimizer params
+  lr: .005
+  weight_decay: 0
+  beta1: .9
+  beta2: .999
+  eps: 1.0e-8
+  clip_max_norm: 1
+
+  # optimizer scheduler
+  sched_step_size: 2
+  sched_gamma: 0.6
+
+  # data params
+  num_proc: 20
+  shuffle: True
+  batch_size: 2048
+  num_epochs: 35
+  eval_freq: 50
+  log_freq: 10
+  using_test_loader: False
+
+# Used for hyperparameter search.
+# For each parameter, if "num_samples" isn't specified, 
+# only the values specificed in the "values" argument will be used
+search_params:
+  search_type: 'grid'
+  lr: 
+    values: [1.0e-5, 1.0e-3]
+    num_samples: 5
