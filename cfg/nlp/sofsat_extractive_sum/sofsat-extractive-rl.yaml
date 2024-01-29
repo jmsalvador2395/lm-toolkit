@@ -1,0 +1,68 @@
+general: 
+    trainer: "sofsat-extractive-rl"
+    seed: 123
+    logdir_base: "{{project_root}}/tensorboard"
+    note: "test"
+
+model:
+    ckpt_dir: "{{project_root}}/checkpoints"
+    save_checkpoint: True
+    keep_higher_eval: True
+    #load_checkpoint: "/data/john/projects/mltoolkit/debug/ckpt/checkpoint.pt"
+
+    # LSTM parameters
+    in_size: 2304
+    lstm_in_size: 1024
+    hidden_size: 1024
+    action_space: 2
+    num_layers: 2
+    dropout: 0.1
+    mlp_layers: 2
+    device: "cuda:2"
+
+    # reward model params
+    reward_model: 'all-mpnet-base-v1'
+    reward_device: "cuda:3"
+    reward_batch_size: 100
+    reward_ver: 1
+    stay_in_budget: True
+
+optim:
+    lr: 1.0e-6
+    weight_decay: 5.0e-6
+    beta1: .9
+    beta2: .999
+    eps: 1.0e-8
+    clip_max_norm: 1.5
+
+    # optimizer scheduler
+    sched_step_size: 10
+    sched_gamma: 0.8
+
+    # swa scheduler
+    swa_begin: -10
+    swa_strat_is_linear: True
+    swa_anneal_epochs: 5
+    swa_lr: 0.05
+    swa_bn_update_steps: "all"
+
+data: 
+    loc: "{{project_root}}/data/all_sides/all_sides.csv"
+    num_proc: 0
+    pin_memory: False
+    num_shards: 1
+    cache_dir: "{{home}}/.cache/huggingface"
+    shuffle: True
+    batch_size: 64
+    num_epochs: 50
+    eval_freq: 50
+    log_freq: 10
+    train_test_split: .85
+    tokenizer_name: "distilbert"
+    commute_prob: 0.5
+    max_seq_len: 512
+    n_docs: 2
+    data_device: "cuda:3"
+    embedder_batch_size: 100
+    doc_model: "all-mpnet-base-v1"
+    use_cls_embs: False

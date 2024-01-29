@@ -1,0 +1,67 @@
+general: 
+    trainer: "all-sides-ranking"
+    seed: 123
+    logdir_base: "{{project_root}}/tensorboard"
+    note: "test"
+
+model:
+    ckpt_dir: "{{project_root}}/checkpoints"
+    save_checkpoint: True
+    keep_higher_eval: True
+    #load_checkpoint: "/data/john/projects/mltoolkit/debug/ckpt/checkpoint.pt"
+
+    # model parameters
+    in_size: 3072
+    hidden_size: 3072
+    out_size: 2
+    dropout: 0.05
+    mlp_layers: 4
+    device: "cuda:3"
+
+    # reward model params
+    reward_model: 'all-mpnet-base-v1'
+    reward_device: "cuda:3"
+    reward_batch_size: 100
+
+optim:
+    lr: 5.0e-5
+    weight_decay: 5.0e-6
+    beta1: .9
+    beta2: .999
+    eps: 1.0e-8
+    clip_max_norm: 2.0
+
+    # optimizer scheduler
+    sched_step_size: 10
+    sched_gamma: 0.95
+
+    # loss function params
+    clip_epsilon: 1.0e-2
+    discount: 1.0
+    c1: 0.8
+    c2: 6.0e-3
+
+data: 
+    loc: "{{project_root}}/data/all_sides/all_sides.csv"
+    num_proc: 0
+    cache_dir: "{{home}}/.cache/huggingface"
+    shuffle: True
+    batch_size: 64
+    num_ppo_epochs: 3
+    num_epochs: 50
+    eval_freq: 50
+    log_freq: 10
+    train_test_split: .85
+    tokenizer_name: "distilbert"
+    commute_prob: 0.5
+    max_seq_len: 512
+    n_docs: 2
+    embedder_batch_size: 100
+    embedding_model: "all-mpnet-base-v1"
+    embedding_device: "cuda:3"
+    obs_type: "torch"
+    num_episodes: 118450 #2369 (number of samples)* 50 (number of epochs)
+    render_mode: null
+    doc_group_size: 3
+    method: "insertion_sort"
+    ordering_method: "random"

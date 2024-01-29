@@ -1,3 +1,2 @@
-from .autoregressive_transformer import (
-    AutoregressiveTransformerDecoder
-)
+from .autoregressive_transformer import AutoregressiveTransformerDecoder
+from .transformer import TransformerDecoder

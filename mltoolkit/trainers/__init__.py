@@ -1,8 +1,12 @@
 from .select import select
-from .example import TrainerExample
 from .base import TrainerBase
+from .gym_base import TrainerBaseGym
 from .cv.mnist import TrainerMNIST
 from .nlp import (
     TrainerAutoLM,
-    TrainerRLExtractive
+    TrainerRLExtractive,
+    TrainerSofsatRanking,
+    TrainerSofsatRankingDCG,
+    TrainerSentenceDecoder,
+    TrainerTextAutoencoder,
 )

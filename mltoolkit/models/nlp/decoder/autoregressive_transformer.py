@@ -95,16 +95,6 @@ class AutoregressiveTransformerDecoder(nn.Module):
             torch.triu(torch.ones(S, S, dtype=torch.bool)).to(out.device)
         attn_mask.fill_diagonal_(False)
 
-        """
-        # feed to transformer
-        for step, dec in enumerate(self.decoder):
-            out = dec(
-                out,
-                out,
-                tgt_is_causal=True,
-                memory_is_causal=True,
-            )
-        """
         out = self.decoder(
             out,
             out,

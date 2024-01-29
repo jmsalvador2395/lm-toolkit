@@ -97,6 +97,13 @@ class TrainerBase:
                     val,
                     step_number,
                 )
+        if 'text' in metrics:
+            for key, val in metrics['text'].items():
+                writer.add_text(
+                    f'{key}/{mode}',
+                    val,
+                    step_number,
+                )
 
     def _log_hparams(self, name, writer, cfg):
         cfg = cfg._asdict()
@@ -198,7 +205,9 @@ class TrainerBase:
         self.model = self.init_model()
         validate.is_assigned(self.model, 'self.model')
         if checkpoint is not None:
-            self.model.load_state_dict(checkpoint['model'])
+            self.model.load_state_dict(
+                checkpoint['model'].state_dict()
+            )
             display.note('loaded model weights from checkpoint')
 
         display.in_progress('printing model summary ...')
@@ -207,6 +216,8 @@ class TrainerBase:
         # count and display learnable parameters
         params = self.model.parameters()
         learnable_params = sum(p.numel() for p in params if p.requires_grad)
+
+        params = self.model.parameters()
         unlearnable_params = sum(p.numel() for p in params if not p.requires_grad)
 
         display.note(
@@ -222,8 +233,12 @@ class TrainerBase:
         display.in_progress('initializing optimizer and lr scheduler ...')
         self.optimizer, self.scheduler = self.init_optimizer()
         if checkpoint is not None:
-            self.optimizer.load_state_dict(checkpoint['optimizer'])
-            self.scheduler.load_state_dict(checkpoint['scheduler'])
+            self.optimizer.load_state_dict(
+                checkpoint['optimizer'].state_dict()
+            )
+            self.scheduler.load_state_dict(
+                checkpoint['scheduler'].state_dict()
+            )
 
         validate.is_assigned(self.optimizer, 'self.optimizer')
         validate.is_assigned(self.scheduler, 'self.scheduler')
@@ -271,14 +286,14 @@ class TrainerBase:
         if self.swa_bn_update_steps == 'all':
             self.swa_bn_update_steps = len(self.train_loader)
         
-        # set swa batchnorm update steps
+        # set swa batchnorm update self.step
         if self.swa_bn_update_steps < 0 or self.swa_bn_update_steps > len(self.train_loader):
             display.error(
                 f'variable \'swa_bn_update_steps\' is set to {self.swa_bn_update_steps} and is not in a valid range. '
                 + f'valid range is 0 <= swa_bn_update_steps <= {len(self.train_loader)} for this dataset'
             )
         display.note(
-            f'SWA is set to update batchnorm statistics for {self.swa_bn_update_steps} training steps. '
+            f'SWA is set to update batchnorm statistics for {self.swa_bn_update_steps} training self.step. '
             + 'If your model does not use batchnorm, you can disable this procedure by setting swa_bn_update_steps to 0'
         )
 
@@ -380,6 +395,8 @@ class TrainerBase:
             cfg.general["experiment_name"],
         ) = self.setup()
 
+        self.writer = writer
+
         # initialize checkpointing-related variables
         best_model_score = \
             -math.inf if cfg.model['keep_higher_eval'] else math.inf
@@ -387,7 +404,7 @@ class TrainerBase:
 
         # initialize variables related to training progress
         num_epochs = cfg.data['num_epochs']
-        steps = 0
+        self.step = 0
         total_steps = len(self.train_loader)*num_epochs
         eval_freq = cfg.data['eval_freq']
         log_freq = cfg.data['log_freq']
@@ -422,14 +439,14 @@ class TrainerBase:
                 # update metrics on progress bar
                 prog_bar.set_postfix({
                     'epoch': epoch,
-                    'step': steps,
+                    'step': self.step,
                     'loss': f'{loss.detach().cpu().numpy():.02f}',
                     'swa_active_step': swa_step,
                     'ckpt_step': last_ckpt,
                 })
 
                 # log training metrics
-                if steps % log_freq == 0:
+                if self.step % log_freq == 0:
 
                     # include defaults in the metrics
                     trn_metrics['scalar'] = trn_metrics.get('scalar', {})
@@ -443,25 +460,25 @@ class TrainerBase:
                     })
 
                     # log
-                    self._log(writer, trn_metrics, steps, mode='train')
+                    self._log(writer, trn_metrics, self.step, mode='train')
 
                 # log evaluation statistics
-                if (steps % eval_freq) == 0:
+                if (self.step % eval_freq) == 0:
 
                     model_score, eval_metrics = self.evaluation_procedure()
-                    self._log(writer, eval_metrics, steps, mode='val')
+                    self._log(writer, eval_metrics, self.step, mode='val')
 
                     # save model state dictionary
                     if self._compare_scores(model_score, best_model_score):
                         torch.save(self.model.state_dict(), f'{ckpt_dir}/best_model.pt')
                         
                         # update trackers
-                        last_ckpt = steps
+                        last_ckpt = self.step
                         best_model_score = model_score
 
                 # update progress bar and increment step counter
                 prog_bar.update()
-                steps += 1
+                self.step += 1
 
             """ post-epoch procedure """
 
@@ -483,7 +500,7 @@ class TrainerBase:
                 # set swa flags
                 if not swa_active:
                     swa_active = True
-                    swa_step = steps
+                    swa_step = self.step
 
                 # perform swa updates
                 self.swa_model.update_parameters(self.model)
@@ -552,7 +569,7 @@ class TrainerBase:
             display.note('swa model saved')
 
         # log last metrics and end 
-        self._log(writer, eval_metrics, steps, mode='val')
+        self._log(writer, eval_metrics, self.step, mode='val')
         display.done(end='\n\n')
 
         """ end final evaluation """
