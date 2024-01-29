@@ -14,7 +14,7 @@ setup(
 	install_requires=requirements,
 	entry_points={
 		'console_scripts' : [
-			'mltk = mltoolkit:main',
+			'mltk = mltoolkit.entry_points:main',
 		],
 	}
 )
