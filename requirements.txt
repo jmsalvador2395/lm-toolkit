@@ -1,3 +1,4 @@
+accelerate
 colorama
 datasets
 evaluate
@@ -10,7 +11,6 @@ nltk
 numpy
 openai
 pandas
-pyzmq==25.1.1
 rouge-score
 scikit-learn
 scipy

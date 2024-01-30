@@ -5,8 +5,8 @@ import os
 from mltoolkit import (
     arguments, 
     unit_testing,
-    evaluation,
-    utils
+    utils,
+    cfg_reader,
 )
 
 from mltoolkit.utils import (
@@ -17,7 +17,6 @@ from mltoolkit.utils import (
 )
 
 from mltoolkit.tasks import select_task
-from mltoolkit import cfg_reader
 
 def main():
     """
@@ -52,7 +51,7 @@ def main():
     
     # read cfg and load task
     cfg, keywords = cfg_reader.load(cfg_path, args.debug)
-    task = select_task(cfg, keywords)
+    task = select_task(cfg, keywords, args.debug)
 
     # execute function based on given procedure
     proc = args.procedure

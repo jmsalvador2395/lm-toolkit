@@ -4,9 +4,10 @@ from mltoolkit.utils import (
 
 class Task:
     
-    def __init__(self, cfg, keywords):
+    def __init__(self, cfg, keywords, debug=False):
         self.cfg = cfg
         self.keywords = keywords
+        self.debug = debug
         self.task_name = '<<Template>>'
 
     def train(self):

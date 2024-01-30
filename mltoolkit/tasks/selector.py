@@ -3,7 +3,7 @@
 from .mnist_mlp import TaskMNIST
 from mltoolkit.utils import display
 
-def select_task(cfg, keywords):
+def select_task(cfg, keywords, debug):
     """
     takes in config and keywords to select and initialize the desired Task class
 
@@ -17,7 +17,7 @@ def select_task(cfg, keywords):
     task_name = cfg.general['task']
 
     if task_name == 'mnist_mlp':
-        return TaskMNIST(cfg, keywords)
+        return TaskMNIST(cfg, keywords, debug)
     else:
         display.error(f'invalid task name: {task_name}')
         raise ValueError()

@@ -1,15 +1,17 @@
 
 from mltoolkit.templates import Task
+from .mnist_trainer import TrainerMNIST
 
 class TaskMNIST(Task):
 
-    def __init__(self, cfg, keywords):
-        super().__init__(cfg, keywords)
+    def __init__(self, cfg, keywords, debug=False):
+        super().__init__(cfg, keywords, debug)
+        self.trainer_cls = TrainerMNIST
 
-    """
     def train(self):
-        display.error(f'Training procedure not defined for {self.task_name}')
-        raise NotImplementedError()
+        trainer = self.trainer_cls(self.cfg, self.debug)
+        breakpoint()
+    """
 
     def evaluate(self):
         display.error(f'Evaluation procedure not defined for {self.task_name}')
