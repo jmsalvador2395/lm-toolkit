@@ -10,7 +10,7 @@ class TaskMNIST(Task):
 
     def train(self):
         trainer = self.trainer_cls(self.cfg, self.debug)
-        breakpoint()
+        trainer.train()
     """
 
     def evaluate(self):

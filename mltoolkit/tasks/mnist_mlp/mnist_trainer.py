@@ -104,17 +104,17 @@ class TrainerMNIST(Trainer):
             scheduler
         )
 
-    def step(self, model, batch, mode='train'):
+    def step(self, batch: T, mode='train'):
 
         # compute scores and calculate loss
-        scores = model(batch['image'].to(self.dev))
-        labels = batch['label'].to(self.dev)
+        scores = self.model(batch['image'])
+        labels = batch['label']
         loss = self.loss_fn(scores, labels)
         accuracy = torch.sum(torch.argmax(scores, dim=-1) == labels)/len(labels)
 
         return loss, accuracy
 
-    def train_step(self, model: nn.Module, batch: T) -> Tuple[torch.Tensor, Dict]:
+    def train_step(self, batch: T) -> Tuple[torch.Tensor, Dict]:
         """
         This function is used to compute the loss and training statistics
 
@@ -128,7 +128,7 @@ class TrainerMNIST(Trainer):
                 refer to {project_root}/mltoolkit/trainers/base.py for the currently supported keyword trackers
         """
 
-        loss, accuracy = self.step(model, batch, mode='train')
+        loss, accuracy = self.step(batch, mode='train')
 
         return loss, {
             'scalar' : {
@@ -137,9 +137,10 @@ class TrainerMNIST(Trainer):
             }
         }
 
-    def eval_step(self, model: nn.Module, batch: T, mode: str):
+    def eval_step(self, batch: T, mode: str):
         """
         same as train_step but batch comes from previously assigned val_loader (test_loader evaluation not implemented yet)
+        NOTE: in this function, torch.Tensor values need to be converted to float/int 
 
         Input
             model[nn.Module]: this will be either the regular model or the averaged model from SWA
@@ -151,14 +152,14 @@ class TrainerMNIST(Trainer):
                 accumulate these metrics into a Dataset object and will be used as input 
                 to on_eval_end() for final aggregation
         """
-        loss, accuracy = self.step(model, batch, mode=mode)
+        loss, accuracy = self.step(batch, mode=mode)
 
         return {
-            'loss': loss,
-            'accuracy': accuracy,
+            'loss': float(loss),
+            'accuracy': float(accuracy),
         }
 
-    def on_eval_end(self, metrics: Dataset, mode: str):
+    def on_eval_end(self, metrics: List, mode: str):
         """
         use this to aggregate your metrics collected from the outputs of eval_step()
 
@@ -170,7 +171,8 @@ class TrainerMNIST(Trainer):
                 checkpointed to {cfg.params['ckpt_dir']}/best_model.pt. Change cfg.params['keep_higher_eval']
                 to True if you want to keep higher values and False to keep lower
         """
-
+        
+        metrics = Dataset.from_list(metrics)
         loss = np.mean(metrics['loss'])
         accuracy = np.mean(metrics['accuracy'])
 
@@ -180,3 +182,6 @@ class TrainerMNIST(Trainer):
                 'accuracy' : accuracy
             }
         }
+
+    def save_criterion(self, new_score, prev_best):
+        return new_score > prev_best

@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import random
 from accelerate import Accelerator
+from accelerate.state import AcceleratorState
 from tqdm import tqdm
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
@@ -26,6 +27,9 @@ class Trainer:
         self.cfg = cfg
         self.debug = debug
 
+        # initialize accelerator
+        self.accelerator = Accelerator()
+
         # set save location for logs
         if debug:
             self.save_loc = f'{files.project_root()}/debug'
@@ -35,13 +39,20 @@ class Trainer:
         else:
             self.save_loc=f'{files.project_root()}/data/{self.cfg.general["experiment_name"]}'
 
+        # set deepspeed batch size
+        try:
+            AcceleratorState().deepspeed_plugin.deepspeed_config['train_micro_batch_size_per_gpu'] = \
+                cfg.params['batch_size']
+
+            display.info('set accelerator state')
+        except:
+            pass
+
         # seed the random number generators
         seed = self.cfg.general['seed']
         torch.manual_seed(seed)
         np.random.seed(seed)
         random.seed(seed)
-
-        self.accelerator = Accelerator()
 
         (self.model,
          self.train_loader, 
@@ -63,6 +74,10 @@ class Trainer:
 
     def on_eval_end(self, metric_list, mode):
         display.error("Trainer.on_eval_end() not implemented")
+        raise NotImplementedError()
+
+    def save_criterion(self, new_score, prev_best):
+        display.error("Trainer.save_criterion() not implemented")
         raise NotImplementedError()
 
     def _log(self, writer, metrics, step_number, mode='train'):
@@ -127,12 +142,12 @@ class Trainer:
         self.accelerator.backward(loss)
 
         # gradient clipping
-        clip_max_norm = self.cfg.optim['clip_max_norm'] 
+        clip_max_norm = self.cfg.params['clip_max_norm'] 
         if clip_max_norm is not None:
             nn.utils.clip_grad_norm_(
                 self.model.parameters(), 
                 clip_max_norm,
-                norm_type=self.cfg.optim['clip_norm_type'],
+                norm_type=self.cfg.params['clip_norm_type'],
                 error_if_nonfinite=False,
                 foreach=True
             )
@@ -145,6 +160,7 @@ class Trainer:
         """
         initialize tensorboard logger and log hyperparameters
         """
+        cfg = self.cfg
 
         display.in_progress('initializing tensorboard logging ...')
         writer = SummaryWriter(
@@ -204,16 +220,7 @@ class Trainer:
 
         return writer, ckpt_dir, cfg.general['log_dir'], cfg.general["experiment_name"]
 
-    def _compare_scores(self, model_score, best_model_score):
-        """
-        compares evaluation scores and makes decision to checkpoint based based on user config
-        """
-        if self.cfg.model['keep_higher_eval']:
-            return model_score >= best_model_score
-        else:
-            return model_score <= best_model_score
-
-    def evaluation_procedure(self, use_test_loader=False, use_swa_model=False, cr=False):
+    def evaluation_procedure(self, use_test_loader=False, cr=False):
         """
         applies no_grad() and model.eval() and then evaluates
         """
@@ -222,7 +229,6 @@ class Trainer:
 
             score, aggregate_metrics = self.evaluate(
                 use_test_loader=use_test_loader,
-                use_swa_model=use_swa_model,
                 cr=cr
             )
 
@@ -231,17 +237,22 @@ class Trainer:
 
     def evaluate(self, use_test_loader=False, cr=False):
         """
-        this function contains the evaluation loop
+        this function contains the evaluation loop. 
         """
 
         metric_list = []
 
-        for batch in tqdm(self.val_loader, total=len(self.val_loader), desc='validating', leave=False):
-            metric_list.append(self.eval_step(model, batch, 'val'))
+        if self.accelerator.is_local_main_process:
+            for batch in tqdm(self.val_loader, total=len(self.val_loader), desc='validating', leave=False):
+                metric_list.append(self.eval_step(batch, 'val'))
+        else:
+            metric_list = [self.eval_step(batch, 'val') for batch in self.val_loader]
+            
         if cr:
             print('\r')
 
-        score, aggregate_metrics = self.on_eval_end(metric_list, mode)
+        metric_list = self.accelerator.gather_for_metrics(metric_list)
+        score, aggregate_metrics = self.on_eval_end(metric_list, 'val')
             
         return score, aggregate_metrics
 
@@ -249,18 +260,25 @@ class Trainer:
         cfg = self.cfg
 
         # initialize directory-related vars
-        self.writer = self._setup_tensorboard()
-        ckpt_dir = cfg.model['ckpt_dir']
-        files.create_path(ckpt_dir)
+        if self.accelerator.is_local_main_process:
+            self.writer = self._setup_tensorboard()
+            ckpt_dir = cfg.paths['ckpt_dir']
+            files.create_path(ckpt_dir)
 
         # initialize variables related to training progress
         num_epochs = cfg.params['num_epochs']
-        self.step = 0
+        self.step_counter = 0
         total_steps = len(self.train_loader)*num_epochs
         eval_freq = cfg.params['eval_freq']
         log_freq = cfg.params['log_freq']
         swa_active = False
         swa_step = None
+        last_ckpt = 0
+
+        # automatically set starting point for best model score based on "save_criterion() function"
+        best_model_score = float('inf')
+        if self.save_criterion(1, 0):
+            best_model_score *= -1
 
         # initialize variables for formatting and 
         max_epoch_digits = len(str(num_epochs))
@@ -269,70 +287,75 @@ class Trainer:
         """ begin training section """
 
         # initialize progress bar
-        display.title('Begin Training')
-        prog_bar = tqdm(
-            range(total_steps),
-            desc=cfg.general["experiment_name"]
-        )
+        if self.accelerator.is_local_main_process:
+            display.title('Begin Training')
+            prog_bar = tqdm(
+                range(total_steps),
+                desc=cfg.general["experiment_name"]
+            )
 
         # enter training loop
         for epoch in range(num_epochs):
             for batch in self.train_loader:
 
                 # compute loss and collect metrics
-                loss, trn_metrics = self.train_step(self.model, batch)
+                loss, trn_metrics = self.train_step(batch)
 
                 # perform optimization step
                 self.optim_step(loss)
 
-                # update metrics on progress bar
-                prog_bar.set_postfix({
-                    'epoch': epoch,
-                    'step': self.step,
-                    'loss': f'{loss.detach().cpu().numpy():.02f}',
-                    'swa_active_step': swa_step,
-                    'ckpt_step': last_ckpt,
-                })
+                if self.accelerator.is_local_main_process:
 
-                # log training metrics
-                if self.step % log_freq == 0:
-
-                    # include defaults in the metrics
-                    trn_metrics['scalar'] = trn_metrics.get('scalar', {})
-                    trn_metrics['scalar'].update({
-                        'loss' : loss,
-                        'vars/epoch' : epoch,
-                        'vars/lr': \
-                            self.scheduler.get_last_lr()[-1]
-                            if not swa_active
-                            else self.swa_scheduler.get_last_lr()[-1],
+                    # update metrics on progress bar
+                    prog_bar.set_postfix({
+                        'epoch': epoch,
+                        'step': self.step_counter,
+                        'loss': f'{loss.detach().cpu().numpy():.02f}',
+                        'swa_active_step': swa_step,
+                        'ckpt_step': last_ckpt,
                     })
 
-                    # log
-                    self._log(writer, trn_metrics, self.step, mode='train')
+                    # log training metrics
+                    if self.step_counter % log_freq == 0:
+
+                        # include defaults in the metrics
+                        trn_metrics['scalar'] = trn_metrics.get('scalar', {})
+                        trn_metrics['scalar'].update({
+                            'loss' : loss,
+                            'vars/epoch' : epoch,
+                            'vars/lr': \
+                                self.scheduler.get_last_lr()[-1]
+                                if not swa_active
+                                else self.swa_scheduler.get_last_lr()[-1],
+                        })
+
+                        self._log(self.writer, trn_metrics, self.step_counter, mode='train')
 
                 # log evaluation statistics
-                if (self.step % eval_freq) == 0:
+                if (self.step_counter % eval_freq) == 0:
 
                     model_score, eval_metrics = self.evaluation_procedure()
-                    self._log(writer, eval_metrics, self.step, mode='val')
 
-                    # save model state dictionary
-                    if self._compare_scores(model_score, best_model_score):
-                        torch.save(self.model.state_dict(), f'{ckpt_dir}/best_model.pt')
-                        
-                        # update trackers
-                        last_ckpt = self.step
-                        best_model_score = model_score
+                    if self.accelerator.is_local_main_process:
+                        self._log(self.writer, eval_metrics, self.step_counter, mode='val')
+
+                        # save model state dictionary
+                        if self.save_criterion(model_score, best_model_score):
+                            torch.save(self.model.state_dict(), f'{ckpt_dir}/best_model.pt')
+                            
+                            # update trackers
+                            last_ckpt = self.step_counter
+                            best_model_score = model_score
 
                 # update progress bar and increment step counter
-                prog_bar.update()
-                self.step += 1
+                if self.accelerator.is_local_main_process:
+                    prog_bar.update()
+                self.step_counter += 1
 
                 self.scheduler.step()
 
-
-        prog_bar.close()
+        if self.accelerator.is_local_main_process:
+            prog_bar.close()
         display.title('Finished Training')
 
         """ end training section """

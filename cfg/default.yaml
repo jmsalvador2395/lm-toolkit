@@ -28,17 +28,16 @@ params:
   clip_max_norm: 1
 
   # optimizer scheduler
-  sched_step_size: 2
-  sched_gamma: 0.6
+  sched_step_size: 4
+  sched_gamma: 0.85
 
   # data params
   num_proc: 20
   shuffle: True
-  batch_size: 2048
-  num_epochs: 35
+  batch_size: 4096
+  num_epochs: 20
   eval_freq: 50
   log_freq: 10
-  using_test_loader: False
 
 # Used for hyperparameter search.
 # For each parameter, if "num_samples" isn't specified, 

@@ -1,6 +1,7 @@
 accelerate
 colorama
 datasets
+deepspeed
 evaluate
 gymnasium
 ipython
