@@ -9,7 +9,6 @@ from accelerate.state import AcceleratorState
 from tqdm import tqdm
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-from torch.optim import swa_utils
 from itertools import product
 from datasets import Dataset
 
@@ -242,7 +241,7 @@ class Trainer:
 
         metric_list = []
 
-        if self.accelerator.is_local_main_process:
+        if self.accelerator.is_main_process:
             for batch in tqdm(self.val_loader, total=len(self.val_loader), desc='validating', leave=False):
                 metric_list.append(self.eval_step(batch, 'val'))
         else:
@@ -260,7 +259,7 @@ class Trainer:
         cfg = self.cfg
 
         # initialize directory-related vars
-        if self.accelerator.is_local_main_process:
+        if self.accelerator.is_main_process:
             self.writer = self._setup_tensorboard()
             ckpt_dir = cfg.paths['ckpt_dir']
             files.create_path(ckpt_dir)
@@ -271,8 +270,6 @@ class Trainer:
         total_steps = len(self.train_loader)*num_epochs
         eval_freq = cfg.params['eval_freq']
         log_freq = cfg.params['log_freq']
-        swa_active = False
-        swa_step = None
         last_ckpt = 0
 
         # automatically set starting point for best model score based on "save_criterion() function"
@@ -287,7 +284,7 @@ class Trainer:
         """ begin training section """
 
         # initialize progress bar
-        if self.accelerator.is_local_main_process:
+        if self.accelerator.is_main_process:
             display.title('Begin Training')
             prog_bar = tqdm(
                 range(total_steps),
@@ -304,14 +301,13 @@ class Trainer:
                 # perform optimization step
                 self.optim_step(loss)
 
-                if self.accelerator.is_local_main_process:
+                if self.accelerator.is_main_process:
 
                     # update metrics on progress bar
                     prog_bar.set_postfix({
                         'epoch': epoch,
                         'step': self.step_counter,
                         'loss': f'{loss.detach().cpu().numpy():.02f}',
-                        'swa_active_step': swa_step,
                         'ckpt_step': last_ckpt,
                     })
 
@@ -323,10 +319,7 @@ class Trainer:
                         trn_metrics['scalar'].update({
                             'loss' : loss,
                             'vars/epoch' : epoch,
-                            'vars/lr': \
-                                self.scheduler.get_last_lr()[-1]
-                                if not swa_active
-                                else self.swa_scheduler.get_last_lr()[-1],
+                            'vars/lr': self.scheduler.get_last_lr()[-1]
                         })
 
                         self._log(self.writer, trn_metrics, self.step_counter, mode='train')
@@ -336,7 +329,7 @@ class Trainer:
 
                     model_score, eval_metrics = self.evaluation_procedure()
 
-                    if self.accelerator.is_local_main_process:
+                    if self.accelerator.is_main_process:
                         self._log(self.writer, eval_metrics, self.step_counter, mode='val')
 
                         # save model state dictionary
@@ -348,15 +341,15 @@ class Trainer:
                             best_model_score = model_score
 
                 # update progress bar and increment step counter
-                if self.accelerator.is_local_main_process:
+                if self.accelerator.is_main_process:
                     prog_bar.update()
                 self.step_counter += 1
 
                 self.scheduler.step()
 
-        if self.accelerator.is_local_main_process:
+        if self.accelerator.is_main_process:
             prog_bar.close()
-        display.title('Finished Training')
+            display.title('Finished Training')
 
         """ end training section """
        

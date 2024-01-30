@@ -14,7 +14,6 @@ params:
   # model params
   in_size: 784
   hidden_dim: 500
-  device: "cuda:1"
   dropout: 0.10
   num_classes: 10
   keep_higher_eval: True
@@ -29,7 +28,7 @@ params:
 
   # optimizer scheduler
   sched_step_size: 4
-  sched_gamma: 0.85
+  sched_gamma: 0.985
 
   # data params
   num_proc: 20
