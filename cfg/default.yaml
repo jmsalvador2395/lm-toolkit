@@ -12,9 +12,10 @@ general:
 
 params:
   # model params
+  compile: True
   in_size: 784
   hidden_dim: 500
-  dropout: 0.10
+  dropout: 0.05
   num_classes: 10
   keep_higher_eval: True
 
@@ -28,13 +29,13 @@ params:
 
   # optimizer scheduler
   sched_step_size: 4
-  sched_gamma: 0.985
+  sched_gamma: 0.999
 
   # data params
   num_proc: 20
   shuffle: True
-  batch_size: 4096
-  num_epochs: 20
+  batch_size: 1024
+  num_epochs: 30
   eval_freq: 50
   log_freq: 10
 

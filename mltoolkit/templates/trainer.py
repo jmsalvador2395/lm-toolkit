@@ -57,7 +57,16 @@ class Trainer:
          self.train_loader, 
          self.val_loader,
          self.optimizer,
-         self.scheduler) = self.accelerator.prepare(self.setup())
+         self.scheduler) = self.setup()
+
+        self.model, self.train_loader, self.val_loader, self.optimizer, self.scheduler = \
+            self.accelerator.prepare(
+                self.model,
+                self.train_loader, 
+                self.val_loader,
+                self.optimizer,
+                self.scheduler
+         )
 
     def setup(self):
         display.error("Trainer.setup() not implemented")
@@ -264,6 +273,7 @@ class Trainer:
             ckpt_dir = cfg.paths['ckpt_dir']
             files.create_path(ckpt_dir)
 
+
         # initialize variables related to training progress
         num_epochs = cfg.params['num_epochs']
         self.step_counter = 0
@@ -307,7 +317,7 @@ class Trainer:
                     prog_bar.set_postfix({
                         'epoch': epoch,
                         'step': self.step_counter,
-                        'loss': f'{loss.detach().cpu().numpy():.02f}',
+                        'loss': f'{float(loss.detach().cpu()):.02f}',
                         'ckpt_step': last_ckpt,
                     })
 
