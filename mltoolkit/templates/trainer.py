@@ -4,11 +4,16 @@ import time
 import torch
 import numpy as np
 import random
+from copy import deepcopy
 from accelerate import Accelerator
 from accelerate.state import AcceleratorState
 from tqdm import tqdm
 from torch import nn
+from torch.nn import Module
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader
 from itertools import product
 from datasets import Dataset
 
@@ -23,50 +28,61 @@ from mltoolkit import cfg_reader
 
 class Trainer:
     def __init__(self, cfg, debug=False):
+
         self.cfg = cfg
         self.debug = debug
+        self.accel = Accelerator()
 
-        # initialize accelerator
-        self.accelerator = Accelerator()
-
-        # set save location for logs
+        # set save location for logs and checkpointing
         if debug:
-            self.save_loc = f'{files.project_root()}/debug'
-            display.debug(f'self.save_loc set to {self.save_loc}')
-        elif 'save_loc' in self.cfg.paths:
-            self.save_loc = self.cfg.paths['save_loc'] + f'/{self.cfg.general["experiment_name"]}'
+            self.results_dir = f'{files.project_root()}/debug/results'
+        elif 'results' in self.cfg.paths:
+            self.results_dir = self.cfg.paths['results']
+            if debug:
+                self.results_dir += '/debug'
+                display.debug(f'self.results_dir set to {self.results_dir}')
+            else:
+                self.results_dir += f'/{self.cfg.general["experiment_name"]}'
         else:
-            self.save_loc=f'{files.project_root()}/data/{self.cfg.general["experiment_name"]}'
-
-        # set deepspeed batch size
-        try:
-            AcceleratorState().deepspeed_plugin.deepspeed_config['train_micro_batch_size_per_gpu'] = \
-                cfg.params['batch_size']
-
-            display.info('set accelerator state')
-        except:
-            pass
+            display.error('cfg.paths[\'results\'] not set in config file')
+            raise ValueError()
 
         # seed the random number generators
         seed = self.cfg.general['seed']
         torch.manual_seed(seed)
         np.random.seed(seed)
         random.seed(seed)
+    
+        # collect training vars (models, optimizers, dataloaders, and lr_schedulers)
+        self.train_vars = self.setup()
+        self._set_var_keys(self.train_vars)
 
-        (self.model,
-         self.train_loader, 
-         self.val_loader,
-         self.optimizer,
-         self.scheduler) = self.setup()
+        # run training vars through accelerate.prepare and repackage into self.train_vars dict
+        prepped_vars = self.accel.prepare(*self.train_vars.values())
+        self.train_vars = {k: v for k, v in zip(self.train_vars.keys(), prepped_vars)}
 
-        self.model, self.train_loader, self.val_loader, self.optimizer, self.scheduler = \
-            self.accelerator.prepare(
-                self.model,
-                self.train_loader, 
-                self.val_loader,
-                self.optimizer,
-                self.scheduler
-         )
+    def _set_var_keys(self, train_vars):
+        """
+        identifies the dictionary keys in train_vars that identifiy Optimizers, LRSchedulers or Dataloaders
+        """
+
+        self.model_keys = []
+        self.optim_keys = []
+        self.sched_keys = []
+        self.loader_keys = []
+
+        for k, v in train_vars.items():
+            if issubclass(type(v), Module):
+                self.model_keys.append(k)
+                continue
+            if issubclass(type(v), DataLoader):
+                self.loader_keys.append(k)
+                continue
+            if issubclass(type(v), Optimizer):
+                self.optim_keys.append(k)
+                continue
+            if issubclass(type(v), LRScheduler):
+                self.sched_keys.append(k)
 
     def setup(self):
         display.error("Trainer.setup() not implemented")
@@ -144,25 +160,38 @@ class Trainer:
         writer.add_text('hparams', table)
 
     def optim_step(self, loss):
+        """
+        automates the optimization step for training
+
+        Input:
+            loss[Tensor | List[Tensor]]: either a single loss value or list of loss values
+        """
+        
+        is_iterable = True if type(loss) == list else False
 
         # backward pass and optimizer step, followed by zero_grad()
-        #loss.backward()
-        self.accelerator.backward(loss)
+        if is_iterable:
+            for val in loss:
+                self.accel.backward(val)
+        else:
+            self.accel.backward(loss)
 
         # gradient clipping
         clip_max_norm = self.cfg.params['clip_max_norm'] 
         if clip_max_norm is not None:
-            nn.utils.clip_grad_norm_(
-                self.model.parameters(), 
-                clip_max_norm,
-                norm_type=self.cfg.params['clip_norm_type'],
-                error_if_nonfinite=False,
-                foreach=True
-            )
+            for model_key in self.model_keys:
+                nn.utils.clip_grad_norm_(
+                    self.train_vars[model_key].parameters(), 
+                    clip_max_norm,
+                    norm_type=self.cfg.params['clip_norm_type'],
+                    error_if_nonfinite=False,
+                    foreach=True
+                )
         
         # optimize and reset gradients
-        self.optimizer.step()
-        self.optimizer.zero_grad()
+        for optim in self.optim_keys:
+            self.train_vars[optim].step()
+            self.train_vars[optim].zero_grad()
 
     def _setup_tensorboard(self):
         """
@@ -182,65 +211,21 @@ class Trainer:
 
         return writer
 
-    def _setup_legacy(self):
-        """
-        old setup function
-        """
-
-        cfg = self.cfg
-        display.title('Setting Up Environment')
-
-        # initialize primary variables. these will be assigned as we run through the setup process
-        self.train_loader = None
-        self.val_loader = None
-        self.test_loader = None
-        self.model = None
-        self.optimizer = None
-        self.scheduler = None
-        checkpoint = None # this will be used for checkpointing logic
-
-        """ checkpointing section """
-
-        display.in_progress('setting up checkpoint directory ...')
-
-        # create checkpoint save directory
-        ckpt_dir = cfg.model['ckpt_dir']
-        files.create_path(ckpt_dir)
-
-        if self.debug:
-            display.debug(f'checkpoints set to be saved to {ckpt_dir}')
-        else:
-            display.note(f'checkpoints set to be saved to {ckpt_dir}')
-        display.done(end='\n\n')
-
-        # load chackpoint if specified
-        if cfg.general['load_checkpoint'] is not None:
-            validate.path_exists(cfg.general['load_checkpoint'])
-            display.in_progress(f'loading checkpoint from: {cfg.general["load_checkpoint"]}')
-            
-            checkpoint = torch.load(cfg.general['load_checkpoint'])
-
-            display.done('\n\n')
-
-        """ end checkpointing section """
-
-        display.title('Finished Setup')
-
-        return writer, ckpt_dir, cfg.general['log_dir'], cfg.general["experiment_name"]
-
     def evaluation_procedure(self, use_test_loader=False, cr=False):
         """
         applies no_grad() and model.eval() and then evaluates
         """
+        for model in self.model_keys:
+            self.train_vars[model].eval()
         with torch.no_grad():
-            self.model.eval()
 
             score, aggregate_metrics = self.evaluate(
                 use_test_loader=use_test_loader,
                 cr=cr
             )
 
-            self.model.train()
+        for model in self.model_keys:
+            self.train_vars[model].train()
         return score, aggregate_metrics
 
     def evaluate(self, use_test_loader=False, cr=False):
@@ -248,19 +233,32 @@ class Trainer:
         this function contains the evaluation loop. 
         """
 
-        metric_list = []
+        vloaders = deepcopy(self.loader_keys)
+        vloaders.remove('train_loader')
 
-        if self.accelerator.is_main_process:
-            for batch in tqdm(self.val_loader, total=len(self.val_loader), desc='validating', leave=False):
-                metric_list.append(self.eval_step(batch, 'val'))
-        else:
-            metric_list = [self.eval_step(batch, 'val') for batch in self.val_loader]
+        metric_lists = {name: [] for name in vloaders}
+
+        for loader_key in vloaders:
+            if self.accel.is_main_process:
+                for batch in tqdm(self.train_vars[loader_key], 
+                             total=len(self.train_vars[loader_key]),
+                             desc=f'validating on {loader_key}',
+                             leave=False):
+                    metric_lists[loader_key].append(self.eval_step(batch, loader_key))
+            else:
+                metric_lists[loader_key] = [
+                    self.eval_step(batch, loader_key) 
+                    for batch in self.train_vars[loader_key]
+                ]
             
         if cr:
             print('\r')
 
-        metric_list = self.accelerator.gather_for_metrics(metric_list)
-        score, aggregate_metrics = self.on_eval_end(metric_list, 'val')
+        metric_lists = {
+            key: self.accel.gather_for_metrics(metric_lists[key])
+            for key in metric_lists.keys()
+        }
+        score, aggregate_metrics = self.on_eval_end(metric_lists, 'val')
             
         return score, aggregate_metrics
 
@@ -268,16 +266,16 @@ class Trainer:
         cfg = self.cfg
 
         # initialize directory-related vars
-        if self.accelerator.is_main_process:
+        if self.accel.is_main_process:
             self.writer = self._setup_tensorboard()
-            ckpt_dir = cfg.paths['ckpt_dir']
+            ckpt_dir = cfg.paths['results'] + '/ckpt'
             files.create_path(ckpt_dir)
 
 
         # initialize variables related to training progress
         num_epochs = cfg.params['num_epochs']
         self.step_counter = 0
-        total_steps = len(self.train_loader)*num_epochs
+        total_steps = len(self.train_vars['train_loader'])*num_epochs
         eval_freq = cfg.params['eval_freq']
         log_freq = cfg.params['log_freq']
         last_ckpt = 0
@@ -294,7 +292,7 @@ class Trainer:
         """ begin training section """
 
         # initialize progress bar
-        if self.accelerator.is_main_process:
+        if self.accel.is_main_process:
             display.title('Begin Training')
             prog_bar = tqdm(
                 range(total_steps),
@@ -303,7 +301,7 @@ class Trainer:
 
         # enter training loop
         for epoch in range(num_epochs):
-            for batch in self.train_loader:
+            for batch in self.train_vars['train_loader']:
 
                 # compute loss and collect metrics
                 loss, trn_metrics = self.train_step(batch)
@@ -311,7 +309,7 @@ class Trainer:
                 # perform optimization step
                 self.optim_step(loss)
 
-                if self.accelerator.is_main_process:
+                if self.accel.is_main_process:
 
                     # update metrics on progress bar
                     prog_bar.set_postfix({
@@ -323,13 +321,22 @@ class Trainer:
 
                     # log training metrics
                     if self.step_counter % log_freq == 0:
+                        # set loss values for train metrics dict
+                        trn_metrics['scalar'] = trn_metrics.get('scalar', {})
+                        if type(loss) == list:
+                            trn_metrics['scalar'].update({f'loss{i:02}': l for i, l in enumerate(loss)})
+                        else:
+                            trn_metrics['scalar'].update({'loss': loss})
+
+                        # set learning rate values for train metrics dict
+                        trn_metrics['scalar'].update({
+                            f'vars/lr-{sk}': self.train_vars[sk].get_last_lr()[-1] 
+                            for sk in self.sched_keys
+                        })
 
                         # include defaults in the metrics
-                        trn_metrics['scalar'] = trn_metrics.get('scalar', {})
                         trn_metrics['scalar'].update({
-                            'loss' : loss,
                             'vars/epoch' : epoch,
-                            'vars/lr': self.scheduler.get_last_lr()[-1]
                         })
 
                         self._log(self.writer, trn_metrics, self.step_counter, mode='train')
@@ -339,25 +346,27 @@ class Trainer:
 
                     model_score, eval_metrics = self.evaluation_procedure()
 
-                    if self.accelerator.is_main_process:
+                    if self.accel.is_main_process:
                         self._log(self.writer, eval_metrics, self.step_counter, mode='val')
 
                         # save model state dictionary
                         if self.save_criterion(model_score, best_model_score):
-                            torch.save(self.model.state_dict(), f'{ckpt_dir}/best_model.pt')
+                            for model in self.model_keys:
+                                torch.save(self.train_vars[model].state_dict(), f'{ckpt_dir}/{model}-best_model.pt')
                             
                             # update trackers
                             last_ckpt = self.step_counter
                             best_model_score = model_score
 
                 # update progress bar and increment step counter
-                if self.accelerator.is_main_process:
+                if self.accel.is_main_process:
                     prog_bar.update()
                 self.step_counter += 1
 
-                self.scheduler.step()
+                for sched in self.sched_keys:
+                    self.train_vars[sched].step()
 
-        if self.accelerator.is_main_process:
+        if self.accel.is_main_process:
             prog_bar.close()
             display.title('Finished Training')
 

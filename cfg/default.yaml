@@ -1,8 +1,7 @@
 paths:
   logdir_base: "{{project_root}}/tensorboard"
-  ckpt_dir: "{{project_root}}/checkpoints"
-  cache_dir: "{{project_root}}/data/cache"
-  save_loc: "{{project_root}}/data"
+  cache: "{{project_root}}/data/cache"
+  results: "{{project_root}}/results"
   
 general: 
   task: "mnist_mlp"
