@@ -104,7 +104,7 @@ class TrainerExample(TrainerBase):
         """
         Use this function to initialize any other important variables that you want to use for training.
         """
-        self.loss_fn = nn.CrossEntropyLoss()
+        pass
 
     def train_step(self, model: nn.Module, batch: T) -> Tuple[torch.Tensor, Dict]:
         """
@@ -155,8 +155,6 @@ class TrainerExample(TrainerBase):
                 accumulate these metrics into a Dataset object and will be used as input 
                 to on_eval_end() for final aggregation
         """
-        # compute loss
-        loss = None
 
         metrics = {
             'example_scalar': None,
@@ -165,7 +163,7 @@ class TrainerExample(TrainerBase):
             'example_scalars': None,
         }
 
-        return loss, metrics
+        return metrics
 
     def on_eval_end(self, metrics: Dataset, mode: str):
         """
@@ -179,6 +177,9 @@ class TrainerExample(TrainerBase):
                 checkpointed to {cfg.model['ckpt_dir']}/best_model.pt. Change cfg.model['keep_higher_eval']
                 to True if you want to keep higher values and False to keep lower
         """
+
+        # compute target metric
+        target_metric = np.mean(metrics['loss'])
 
         # compute other metrics
         metrics = {
@@ -195,3 +196,5 @@ class TrainerExample(TrainerBase):
                 'example_scalars': None # figure it out lol
             }, 
         }
+
+        return target_metric, metrics
