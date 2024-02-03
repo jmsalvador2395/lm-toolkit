@@ -46,12 +46,12 @@ class TrainerMNIST(Trainer):
                 cfg.params['num_classes'],
             )
         )
-        model = model.to(torch.float32)
+        model = model.to(torch.bfloat16)
 
         # load mnist dataset
         ds = datasets.load_dataset(
             'mnist',
-            cache_dir=cfg.paths['cache_dir']
+            cache_dir=cfg.paths['cache']
         ).with_format('torch')
         in_size = cfg.params['hidden_dim']
 
@@ -97,18 +97,18 @@ class TrainerMNIST(Trainer):
 
         self.loss_fn = nn.CrossEntropyLoss()
 
-        return (
-            model,
-            train_loader,
-            val_loader,
-            optimizer,
-            scheduler
-        )
+        return {
+            'model': model,
+            'train_loader': train_loader,
+            'val_loader': val_loader,
+            'optimizer': optimizer,
+            'scheduler': scheduler
+        }
 
     def step(self, batch: T, mode='train'):
 
         # compute scores and calculate loss
-        scores = self.model(batch['image'])
+        scores = self.train_vars['model'](batch['image'])
         labels = batch['label']
         loss = self.loss_fn(scores, labels)
         accuracy = torch.sum(torch.argmax(scores, dim=-1) == labels)/len(labels)
@@ -138,13 +138,12 @@ class TrainerMNIST(Trainer):
             }
         }
 
-    def eval_step(self, batch: T, mode: str):
+    def eval_step(self, batch: T, loader_name):
         """
         same as train_step but batch comes from previously assigned val_loader (test_loader evaluation not implemented yet)
         NOTE: in this function, torch.Tensor values need to be converted to float/int 
 
         Input
-            model[nn.Module]: this will be either the regular model or the averaged model from SWA
             batch[T]: a batch sampled from the previously assigned train dataloader
             mode[str]: string that will be either 'val' or 'train' depending on the procedure. 
 
@@ -153,7 +152,7 @@ class TrainerMNIST(Trainer):
                 accumulate these metrics into a Dataset object and will be used as input 
                 to on_eval_end() for final aggregation
         """
-        loss, accuracy = self.step(batch, mode=mode)
+        loss, accuracy = self.step(batch, mode='val')
 
         return {
             'loss': float(loss),
@@ -165,17 +164,17 @@ class TrainerMNIST(Trainer):
         use this to aggregate your metrics collected from the outputs of eval_step()
 
         Input:
-            metrics[Dataset]: the set of metrics collected from eval_step()
+            metrics[Dict[str, list]]: the set of metrics collected from eval_step()
 
         Return
             target_metric[T]: the metric that will be used to determine if the current model should be 
-                checkpointed to {cfg.params['ckpt_dir']}/best_model.pt. Change cfg.params['keep_higher_eval']
-                to True if you want to keep higher values and False to keep lower
+                checkpointed to {cfg.params['results']}/best_model.pt.
+            log_values[Dict[Dict[str, T]]]: 
         """
-        
-        metrics = Dataset.from_list(metrics)
-        loss = np.mean(metrics['loss'])
-        accuracy = np.mean(metrics['accuracy'])
+
+        metrics_ds = Dataset.from_list(metrics['val_loader'])
+        loss = np.mean(metrics_ds['loss'])
+        accuracy = np.mean(metrics_ds['accuracy'])
 
         return accuracy, {
             'scalar' : {

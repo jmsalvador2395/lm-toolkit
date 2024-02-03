@@ -3,6 +3,7 @@ tensorboard/
 tensorboard_archive/
 debug/
 data/*
+results/
 checkpoints/
 .vscode/
 archive/
