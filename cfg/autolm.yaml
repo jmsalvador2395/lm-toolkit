@@ -23,8 +23,8 @@ params:
   dtype: "bfloat16"
 
   # optimizer params
-  lr: 5.0e-4
-  weight_decay: 1.0e-4
+  lr: 1.0e-3
+  weight_decay: 6.0e-4
   beta1: .9
   beta2: .999
   eps: 1.0e-8

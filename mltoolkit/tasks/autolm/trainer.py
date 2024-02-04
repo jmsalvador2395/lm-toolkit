@@ -26,8 +26,12 @@ from mltoolkit.utils import (
 from .model import AutoLM
 
 class TrainerAutoLM(Trainer):
-    def __init__(self, config_path, debug=False):
-        super().__init__(config_path, debug)
+    def __init__(self, config_path, debug=False, accelerator=None):
+        super().__init__(
+            config_path,
+            debug,
+            accelerator=accelerator
+        )
 
     def setup(self):
         cfg = self.cfg
@@ -115,7 +119,7 @@ class TrainerAutoLM(Trainer):
         attn_mask = attn_mask.triu(diagonal=1)
 
         # compute scores and calculate loss
-        scores = self.train_vars['model'](
+        scores = self.train_vars['autolm'](
             input_ids,
             attn_mask,
             pad_mask,

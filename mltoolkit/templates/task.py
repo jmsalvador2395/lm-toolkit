@@ -32,7 +32,7 @@ class Task:
             display.error(f'Training procedure not defined for {self.task_name}')
             raise NotImplementedError()
         else:
-            trainer = self.trainer_cls(self.cfg, self.debug)
+            trainer = self.trainer_cls(self.cfg, debug=self.debug)
             trainer.train()
 
     def param_search(self):
@@ -124,7 +124,11 @@ class Task:
                 candidate_config.general['experiment_name'] + f'/search-{i:03}'
 
             accel.wait_for_everyone()
-            trainer = self.trainer_cls(candidate_config, accel)
+            trainer = self.trainer_cls( 
+                candidate_config,
+                accelerator=accel,
+                debug=self.debug
+            )
             try:
                 score = trainer.train(
                     step_limit=step_limit,
@@ -158,8 +162,8 @@ class Task:
                     f.write(yaml.dump(candidate_config._asdict()))
                 with open(out_dir + '/info.txt', 'w') as f:
                     f.write(
-                        f'best model score: {best_score}'
-                        f'best model score found at step {save_step}'
+                        f'best model score: {best_score}\n'
+                        f'best model score found at step {save_step}\n'
                         f'params: {temp_out[-1]}'
                     )
 

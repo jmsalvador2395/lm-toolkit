@@ -28,13 +28,13 @@ from mltoolkit.utils import (
 from mltoolkit import cfg_reader
 
 class Trainer:
-    def __init__(self, cfg, accelerator=None, debug=False):
+    def __init__(self, cfg, debug=False, accelerator=None):
 
         self.cfg = cfg
         self.debug = debug
         self.experiment_name = cfg.general['experiment_name']
         self.accel = accelerator
-        if accelerator is None:
+        if type(accelerator) != Accelerator:
             self.accel = Accelerator()
 
         # set save location for logs and checkpointing
@@ -333,6 +333,8 @@ class Trainer:
             display.title('Begin Training', fill_char='-')
             if step_limit is not None:
                 bar_range = min(total_steps, step_limit)
+            else:
+                bar_range = total_steps
             prog_bar = tqdm(
                 range(bar_range),
                 desc=cfg.general["experiment_name"]

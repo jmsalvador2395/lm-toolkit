@@ -25,8 +25,12 @@ from mltoolkit.utils import (
 )
 
 class TrainerMNIST(Trainer):
-    def __init__(self, config_path, debug=False):
-        super().__init__(config_path, debug)
+    def __init__(self, config_path, debug=False , accelerator=None):
+        super().__init__(
+            config_path,
+            debug,
+            accelerator=accelerator
+        )
 
     def setup(self):
         cfg = self.cfg
