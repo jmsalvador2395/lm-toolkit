@@ -117,9 +117,9 @@ class TrainerAutoLM(Trainer):
         scores = scores[label_mask]
 
         loss = self.loss_fn(scores, labels)
-        #accuracy = torch.sum(torch.argmax(scores, dim=-1) == labels)/len(labels)
+        perplexity = torch.exp(loss.detach())
 
-        return loss#, accuracy
+        return loss, perplexity
 
     def train_step(self, batch: T) -> Tuple[torch.Tensor, Dict]:
         """
@@ -135,13 +135,12 @@ class TrainerAutoLM(Trainer):
                 refer to {project_root}/mltoolkit/trainers/base.py for the currently supported keyword trackers
         """
 
-        #loss, accuracy = self.step(batch, mode='train')
-        loss = self.step(batch, mode='train')
+        loss, perplexity = self.step(batch, mode='train')
 
         return loss, {
             'scalar' : {
                 'loss' : loss,
-                #'accuracy' : accuracy
+                'perplexity': perplexity,
             }
         }
 
@@ -161,11 +160,11 @@ class TrainerAutoLM(Trainer):
         """
         #loss, accuracy = self.step(batch, mode='val')
 
-        loss = self.step(batch, mode='val')
+        loss, perplexity = self.step(batch, mode='val')
 
         return {
             'loss': float(loss),
-            #'accuracy': float(accuracy),
+            'perplexity': float(perplexity),
         }
 
     def on_eval_end(self, metrics: List, mode: str):
@@ -183,12 +182,12 @@ class TrainerAutoLM(Trainer):
 
         metrics_ds = Dataset.from_list(metrics['val_loader'])
         loss = np.mean(metrics_ds['loss'])
-        accuracy = np.mean(metrics_ds['accuracy'])
+        #accuracy = np.mean(metrics_ds['accuracy'])
 
         return accuracy, {
             'scalar' : {
                 'loss' : loss,
-                'accuracy' : accuracy
+                'perplexity': perplexity,
             }
         }
 

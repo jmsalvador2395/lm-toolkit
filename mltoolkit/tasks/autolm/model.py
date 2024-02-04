@@ -41,14 +41,21 @@ class AutoLM(nn.Module):
             num_layers=n_layers,
         )
 
-    def forward(self, input_ids, attn_mask, pad_mask):
+        self.affine = nn.Linear(
+            d_embed,
+            len(tokenizer)
+        )
+
+    def forward(self, input_ids, attn_mask, pad_mask, return_hidden=False):
 
         emb = self.embeds(input_ids)
 
-        return self.xformer(
+        scores = self.xformer(
             emb, 
             mask=attn_mask,
             src_key_padding_mask=pad_mask,
             is_causal=True,
         )
+
+        return  self.affine(scores)
 
