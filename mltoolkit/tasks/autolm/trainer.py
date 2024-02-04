@@ -49,7 +49,8 @@ class TrainerAutoLM(Trainer):
         # load mnist dataset
         ds = datasets.load_dataset(
             'bookcorpus',
-            cache_dir=cfg.paths['cache']
+            cache_dir=cfg.paths['cache'],
+            trust_remote_code=True,
         )
         ds = ds['train'].train_test_split(
             train_size=cfg.params['train_test_split']
@@ -189,6 +190,7 @@ class TrainerAutoLM(Trainer):
 
         metrics_ds = Dataset.from_list(metrics['val_loader'])
         loss = np.mean(metrics_ds['loss'])
+        perplexity = np.mean(metrics_ds['perplexity'])
         #accuracy = np.mean(metrics_ds['accuracy'])
 
         return perplexity, {

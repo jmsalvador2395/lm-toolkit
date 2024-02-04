@@ -131,6 +131,9 @@ class Task:
                 )
             except:
                 score = bad_score
+                display.warning(
+                    f'Exception occured during training. setting score to {bad_score}'
+                )
 
             if accel.is_main_process:
                 scores.append(score)
@@ -144,9 +147,10 @@ class Task:
                 save_step = i
                 files.create_path(out_dir)
                 with open(out_dir + '/best_config.yaml', 'w') as f:
+                    candidate_config.general.pop('experiment_name')
                     f.write(yaml.dump(candidate_config._asdict()))
                 with open(out_dir + '/info.txt', 'w') as f:
-                    f.write(f'best model score: {best_score}')
+                    f.write(f'best model score: {best_score}\n')
                     f.write(f'params: {temp_out[-1]}')
 
             # update progbar

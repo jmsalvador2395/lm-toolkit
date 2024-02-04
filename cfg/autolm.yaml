@@ -9,7 +9,7 @@ general:
   note: "a quick note about this training run. this note will show up in tensorboard."
 
 params:
-  save_criterion: "max"
+  save_criterion: "min"
   save_checkpoint: True
 
   # model params
@@ -20,7 +20,7 @@ params:
   dim_feed_forward:  2048
   tokenizer: "bert-base-uncased"
   seq_len: 256
-  dtype: "float32"
+  dtype: "bfloat16"
 
   # optimizer params
   lr: .001
@@ -39,24 +39,30 @@ params:
   shuffle: True
   batch_size: 42
   num_epochs: 4
-  eval_freq: 200
-  log_freq: 50
+  eval_freq: 100
+  log_freq: 10
   train_test_split: .98
 
   # misc options
-  skip_first_eval: True
+  skip_first_eval: False
 
 # Used for hyperparameter search.
 # For each parameter, if "num_samples" isn't specified, 
 # only the values specificed in the "values" argument will be used
 search_params:
+  # search settings
   search_type: 'grid'
-  step_limit: 20
-  lr: 
-    values: [1.0e-5, 1.0e-3]
-    num_samples: 5
-    dtype: "float"
+  step_limit: 300
+
+  # search params
   weight_decay:
     values: [1.0e-6, 1.0e-3]
     num_samples: 4
     dtype: "int"
+  batch_size: 
+    values: [42, 56, 66]
+    dtype: "int"
+  lr: 
+    values: [1.0e-3, 1.0e-5]
+    num_samples: 5
+    dtype: "float"

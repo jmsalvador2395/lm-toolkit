@@ -316,7 +316,7 @@ class Trainer:
         last_ckpt = 0
 
         # automatically set starting point for best model score based on "save_criterion() function"
-        if best_model_score is not None:
+        if best_model_score is None:
             best_model_score = float('inf')
             if self.save_criterion(1, 0):
                 best_model_score *= -1
