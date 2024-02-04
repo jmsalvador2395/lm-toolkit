@@ -1,0 +1,51 @@
+paths:
+  logdir_base: "{{project_root}}/tensorboard"
+  cache: "{{project_root}}/data/cache"
+  results: "{{project_root}}/results"
+  
+general: 
+  task: "autolm"
+  seed: 125
+  note: "a quick note about this training run. this note will show up in tensorboard."
+
+params:
+  # model params
+  compile: True
+  keep_higher_eval: True
+  d_embed: 1024
+  n_transformer_layers: 6
+  n_head: 8
+  dropout: .05
+  dim_feed_forward:  2048
+  tokenizer: "bert-base-uncased"
+  seq_len: 512
+
+  # optimizer params
+  lr: .005
+  weight_decay: 0
+  beta1: .9
+  beta2: .999
+  eps: 1.0e-8
+  clip_max_norm: 1
+
+  # optimizer scheduler
+  sched_step_size: 2
+  sched_gamma: 0.98
+
+  # data params
+  num_proc: 20
+  shuffle: True
+  batch_size: 16
+  num_epochs: 30
+  eval_freq: 50
+  log_freq: 10
+  train_test_split: .9
+
+# Used for hyperparameter search.
+# For each parameter, if "num_samples" isn't specified, 
+# only the values specificed in the "values" argument will be used
+search_params:
+  search_type: 'grid'
+  lr: 
+    values: [1.0e-5, 1.0e-3]
+    num_samples: 5

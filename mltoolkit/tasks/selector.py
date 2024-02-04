@@ -1,6 +1,7 @@
 
 
 from .mnist_mlp import TaskMNIST
+from .autolm import TaskAutoLM
 from mltoolkit.utils import display
 
 def select_task(cfg, keywords, debug):
@@ -18,6 +19,8 @@ def select_task(cfg, keywords, debug):
 
     if task_name == 'mnist_mlp':
         return TaskMNIST(cfg, keywords, debug)
+    if task_name == 'autolm':
+        return TaskAutoLM(cfg, keywords, debug)
     else:
         display.error(f'invalid task name: {task_name}')
         raise ValueError()
