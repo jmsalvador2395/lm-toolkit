@@ -23,7 +23,7 @@ params:
   dtype: "bfloat16"
 
   # optimizer params
-  lr: .001
+  lr: 5.0e-4
   weight_decay: 1.0e-4
   beta1: .9
   beta2: .999
@@ -39,9 +39,9 @@ params:
   shuffle: True
   batch_size: 42
   num_epochs: 4
-  eval_freq: 100
-  log_freq: 10
-  train_test_split: .98
+  eval_freq: 200
+  log_freq: 50
+  train_test_split: .995
 
   # misc options
   skip_first_eval: False
@@ -52,17 +52,13 @@ params:
 search_params:
   # search settings
   search_type: 'grid'
-  step_limit: 300
+  step_limit: 1000
 
   # search params
   weight_decay:
     values: [1.0e-6, 1.0e-3]
     num_samples: 4
-    dtype: "int"
-  batch_size: 
-    values: [42, 56, 66]
-    dtype: "int"
-  lr: 
-    values: [1.0e-3, 1.0e-5]
-    num_samples: 5
+    dtype: "float"
+  lr:
+    values: [1.0e-4, 1.0e-3]
     dtype: "float"

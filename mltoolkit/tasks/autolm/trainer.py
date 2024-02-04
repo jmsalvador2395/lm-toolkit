@@ -85,7 +85,7 @@ class TrainerAutoLM(Trainer):
         self.loss_fn = nn.CrossEntropyLoss()
 
         return {
-            'model': model,
+            'autolm': model,
             'train_loader': train_loader,
             'val_loader': val_loader,
             'optimizer': optimizer,

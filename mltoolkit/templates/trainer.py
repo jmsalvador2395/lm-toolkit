@@ -114,9 +114,9 @@ class Trainer:
         options = ['max', 'min']
 
         if criterion == 'max':
-            return cur > prev
+            return cur >= prev
         elif criterion == 'min':
-            return cur < prev
+            return cur <= prev
         else:
             display.error('cfg.params[save_criterion] not specified choose from: ["max", "min"]')
             raise ValueError()
@@ -284,7 +284,7 @@ class Trainer:
             
         return score, aggregate_metrics
 
-    def train(self, step_limit=None, best_model_score=None, exp_num=None):
+    def train(self, step_limit=None, global_best_score=None, exp_num=None):
         cfg = self.cfg
         save_ckpt = cfg.params['save_checkpoint']
 
@@ -316,10 +316,11 @@ class Trainer:
         last_ckpt = 0
 
         # automatically set starting point for best model score based on "save_criterion() function"
-        if best_model_score is None:
-            best_model_score = float('inf')
-            if self.save_criterion(1, 0):
-                best_model_score *= -1
+        local_best_score = float('inf')
+        if self.save_criterion(1, 0):
+            local_best_score *= -1
+        if global_best_score is None:
+            global_best_score = local_best_score
 
         # initialize variables for formatting and 
         max_epoch_digits = len(str(num_epochs))
@@ -383,25 +384,35 @@ class Trainer:
                 if (self.step_counter % eval_freq) == 0 and not skip:
 
                     model_score, eval_metrics = self.evaluation_procedure()
+                    self.accel.wait_for_everyone()
 
                     if self.accel.is_main_process:
                         self._log(self.writer, eval_metrics, self.step_counter, mode='val')
 
                         # save model state dictionary
-                        if self.save_criterion(model_score, best_model_score):
-                            if save_ckpt:
+                        if self.save_criterion(model_score, local_best_score):
+                            local_best_score = model_score
+                            if save_ckpt and self.save_criterion(local_best_score, global_best_score):
+                                # update trackers
+                                last_ckpt = self.step_counter
+                                global_best_score = local_best_score
                                 for model in self.model_keys:
-                                    torch.save(self.train_vars[model].state_dict(), f'{ckpt_dir}/{model}-best_model.pt')
+                                    self.accel.save_model(
+                                        self.train_vars[model],
+                                        f'{ckpt_dir}/{model}-best_model',
+                                        max_shard_size="1GB",
+                                        safe_serialization=True
+                                    )
+
+                    # force all other processes to wait for final evaluation
+                    self.accel.wait_for_everyone()
                             
-                            # update trackers
-                            last_ckpt = self.step_counter
-                            best_model_score = model_score
 
                 if step_limit is not None and step_limit == self.step_counter:
                     if self.accel.is_main_process:
-                        display.done(f'Step limit reached. best model score: {best_model_score}')
+                        display.done(f'Step limit reached. best model score: {local_best_score}')
                     self.accel.wait_for_everyone()
-                    return best_model_score
+                    return local_best_score
 
                 # set skip value so it can enter back into the evaluation procedure
                 skip = False
@@ -420,5 +431,5 @@ class Trainer:
 
         """ end training section """
 
-        return best_model_score
+        return local_best_score
        

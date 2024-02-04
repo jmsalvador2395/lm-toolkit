@@ -3,6 +3,8 @@ import numpy as np
 import itertools
 import yaml
 import json
+import traceback
+import os
 from tqdm import tqdm
 from copy import deepcopy
 from accelerate import Accelerator
@@ -126,14 +128,19 @@ class Task:
             try:
                 score = trainer.train(
                     step_limit=step_limit,
-                    best_model_score=best_score,
+                    global_best_score=best_score,
                     exp_num=i,
                 )
-            except:
-                score = bad_score
-                display.warning(
-                    f'Exception occured during training. setting score to {bad_score}'
+            except KeyboardInterrupt:
+                display.done('Keyboard interrupt detected')
+                os._exit(0)
+            except Exception as e:
+                display.error(
+                    f'Exception occured during training. at parameter set {i}'
                 )
+                traceback.print_exception(e)
+                os._exit(1)
+
 
             if accel.is_main_process:
                 scores.append(score)
@@ -150,8 +157,11 @@ class Task:
                     candidate_config.general.pop('experiment_name')
                     f.write(yaml.dump(candidate_config._asdict()))
                 with open(out_dir + '/info.txt', 'w') as f:
-                    f.write(f'best model score: {best_score}\n')
-                    f.write(f'params: {temp_out[-1]}')
+                    f.write(
+                        f'best model score: {best_score}'
+                        f'best model score found at step {save_step}'
+                        f'params: {temp_out[-1]}'
+                    )
 
             # update progbar
             if accel.is_main_process:
