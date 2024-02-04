@@ -46,7 +46,6 @@ class TrainerMNIST(Trainer):
                 cfg.params['num_classes'],
             )
         )
-        model = model.to(torch.bfloat16)
 
         # load mnist dataset
         ds = datasets.load_dataset(

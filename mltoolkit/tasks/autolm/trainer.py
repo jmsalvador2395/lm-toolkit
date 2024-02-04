@@ -38,6 +38,13 @@ class TrainerAutoLM(Trainer):
 
         # define model
         model = AutoLM(cfg)
+        dtype = cfg.params['dtype']
+        if dtype == 'float32':
+            pass
+        elif dtype == 'float16':
+            model = model.half()
+        elif dtype == 'bfloat16':
+            model = model.to(torch.bfloat16)
 
         # load mnist dataset
         ds = datasets.load_dataset(
@@ -184,12 +191,9 @@ class TrainerAutoLM(Trainer):
         loss = np.mean(metrics_ds['loss'])
         #accuracy = np.mean(metrics_ds['accuracy'])
 
-        return accuracy, {
+        return perplexity, {
             'scalar' : {
                 'loss' : loss,
                 'perplexity': perplexity,
             }
         }
-
-    def save_criterion(self, new_score, prev_best):
-        return new_score > prev_best

@@ -4,6 +4,8 @@ import time
 import torch
 import numpy as np
 import random
+import traceback
+import os
 from copy import deepcopy
 from accelerate import Accelerator
 from accelerate.state import AcceleratorState
@@ -14,7 +16,6 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
-from itertools import product
 from datasets import Dataset
 
 # local imports
@@ -27,11 +28,14 @@ from mltoolkit.utils import (
 from mltoolkit import cfg_reader
 
 class Trainer:
-    def __init__(self, cfg, debug=False):
+    def __init__(self, cfg, accelerator=None, debug=False):
 
         self.cfg = cfg
         self.debug = debug
-        self.accel = Accelerator()
+        self.experiment_name = cfg.general['experiment_name']
+        self.accel = accelerator
+        if accelerator is None:
+            self.accel = Accelerator()
 
         # set save location for logs and checkpointing
         if debug:
@@ -52,14 +56,6 @@ class Trainer:
         torch.manual_seed(seed)
         np.random.seed(seed)
         random.seed(seed)
-    
-        # collect training vars (models, optimizers, dataloaders, and lr_schedulers)
-        self.train_vars = self.setup()
-        self._set_var_keys(self.train_vars)
-
-        # run training vars through accelerate.prepare and repackage into self.train_vars dict
-        prepped_vars = self.accel.prepare(*self.train_vars.values())
-        self.train_vars = {k: v for k, v in zip(self.train_vars.keys(), prepped_vars)}
 
     def _set_var_keys(self, train_vars):
         """
@@ -88,6 +84,19 @@ class Trainer:
         display.error("Trainer.setup() not implemented")
         raise NotImplementedError()
 
+    def run_setup(self):
+        """
+        runs the uder-defined setup function to collect training variabls
+        training vars include: models, optimizers, dataloaders, and lr_schedulers
+        """
+        # collect training vars 
+        self.train_vars = self.setup()
+        self._set_var_keys(self.train_vars)
+
+        # run training vars through accelerate.prepare and repackage into self.train_vars dict
+        prepped_vars = self.accel.prepare(*self.train_vars.values())
+        self.train_vars = {k: v for k, v in zip(self.train_vars.keys(), prepped_vars)}
+
     def train_step(self, batch):
         display.error("Trainer.train_step() not implemented")
         raise NotImplementedError()
@@ -100,9 +109,17 @@ class Trainer:
         display.error("Trainer.on_eval_end() not implemented")
         raise NotImplementedError()
 
-    def save_criterion(self, new_score, prev_best):
-        display.error("Trainer.save_criterion() not implemented")
-        raise NotImplementedError()
+    def save_criterion(self, cur, prev):
+        criterion = self.cfg.params.get('save_criterion', None)
+        options = ['max', 'min']
+
+        if criterion == 'max':
+            return cur > prev
+        elif criterion == 'min':
+            return cur < prev
+        else:
+            display.error('cfg.params[save_criterion] not specified choose from: ["max", "min"]')
+            raise ValueError()
 
     def _log(self, writer, metrics, step_number, mode='train'):
         if metrics is None:
@@ -170,11 +187,16 @@ class Trainer:
         is_iterable = True if type(loss) == list else False
 
         # backward pass and optimizer step, followed by zero_grad()
-        if is_iterable:
-            for val in loss:
-                self.accel.backward(val)
-        else:
-            self.accel.backward(loss)
+        try:
+            if is_iterable:
+                for val in loss:
+                    self.accel.backward(val)
+            else:
+                self.accel.backward(loss)
+        except Exception as e:
+            display.error(f'Exception occured calling backpropagation at training step: {self.step_counter}')
+            traceback.print_exception(e)
+            os._exit(1)
 
         # gradient clipping
         clip_max_norm = self.cfg.params['clip_max_norm'] 
@@ -201,11 +223,11 @@ class Trainer:
 
         display.in_progress('initializing tensorboard logging ...')
         writer = SummaryWriter(
-            log_dir=cfg.paths['log_dir']
+            log_dir=cfg.paths['log_dir'] + f'/{self.experiment_name}'
         )
-        self._log_hparams(cfg.general["experiment_name"], writer, cfg)
+        self._log_hparams(self.experiment_name, writer, cfg)
         display.note(
-            f'tensorboard writer initialized. access logs at {cfg.paths["log_dir"]}'
+            f'tensorboard writer initialized. access logs at {cfg.paths["log_dir"]}/{self.experiment_name}'
         )
         display.done(end='\n\n')
 
@@ -262,14 +284,26 @@ class Trainer:
             
         return score, aggregate_metrics
 
-    def train(self):
+    def train(self, step_limit=None, best_model_score=None, exp_num=None):
         cfg = self.cfg
+        save_ckpt = cfg.params['save_checkpoint']
+
+        if self.accel.is_main_process:
+            display.in_progress('Running setup() function')
+        self.run_setup()
+        if self.accel.is_main_process:
+            display.done('Finished running setup() function')
+        self.accel.wait_for_everyone()
 
         # initialize directory-related vars
         if self.accel.is_main_process:
             self.writer = self._setup_tensorboard()
-            ckpt_dir = cfg.paths['results'] + '/ckpt'
-            files.create_path(ckpt_dir)
+            ckpt_dir = cfg.paths['results'] + f'/{self.experiment_name}'
+            if exp_num is not None:
+                ckpt_dir = files.dirname(ckpt_dir)
+            if save_ckpt:
+                files.create_path(ckpt_dir)
+        self.accel.wait_for_everyone()
 
 
         # initialize variables related to training progress
@@ -278,12 +312,14 @@ class Trainer:
         total_steps = len(self.train_vars['train_loader'])*num_epochs
         eval_freq = cfg.params['eval_freq']
         log_freq = cfg.params['log_freq']
+        skip = cfg.params['skip_first_eval']
         last_ckpt = 0
 
         # automatically set starting point for best model score based on "save_criterion() function"
-        best_model_score = float('inf')
-        if self.save_criterion(1, 0):
-            best_model_score *= -1
+        if best_model_score is not None:
+            best_model_score = float('inf')
+            if self.save_criterion(1, 0):
+                best_model_score *= -1
 
         # initialize variables for formatting and 
         max_epoch_digits = len(str(num_epochs))
@@ -293,9 +329,11 @@ class Trainer:
 
         # initialize progress bar
         if self.accel.is_main_process:
-            display.title('Begin Training')
+            display.title('Begin Training', fill_char='-')
+            if step_limit is not None:
+                bar_range = min(total_steps, step_limit)
             prog_bar = tqdm(
-                range(total_steps),
+                range(bar_range),
                 desc=cfg.general["experiment_name"]
             )
 
@@ -342,7 +380,7 @@ class Trainer:
                         self._log(self.writer, trn_metrics, self.step_counter, mode='train')
 
                 # log evaluation statistics
-                if (self.step_counter % eval_freq) == 0:
+                if (self.step_counter % eval_freq) == 0 and not skip:
 
                     model_score, eval_metrics = self.evaluation_procedure()
 
@@ -351,12 +389,22 @@ class Trainer:
 
                         # save model state dictionary
                         if self.save_criterion(model_score, best_model_score):
-                            for model in self.model_keys:
-                                torch.save(self.train_vars[model].state_dict(), f'{ckpt_dir}/{model}-best_model.pt')
+                            if save_ckpt:
+                                for model in self.model_keys:
+                                    torch.save(self.train_vars[model].state_dict(), f'{ckpt_dir}/{model}-best_model.pt')
                             
                             # update trackers
                             last_ckpt = self.step_counter
                             best_model_score = model_score
+
+                if step_limit is not None and step_limit == self.step_counter:
+                    if self.accel.is_main_process:
+                        display.done(f'Step limit reached. best model score: {best_model_score}')
+                    self.accel.wait_for_everyone()
+                    return best_model_score
+
+                # set skip value so it can enter back into the evaluation procedure
+                skip = False
 
                 # update progress bar and increment step counter
                 if self.accel.is_main_process:
@@ -368,7 +416,9 @@ class Trainer:
 
         if self.accel.is_main_process:
             prog_bar.close()
-            display.title('Finished Training')
+            display.title('Finished Training', fill_char='-')
 
         """ end training section """
+
+        return best_model_score
        

@@ -58,11 +58,8 @@ def load(path_str: str, debug=False):
 
         cfg.paths['log_dir'] = \
             debug_dir \
-            + f'/tensorboard/{cfg.general["experiment_name"]}' 
+            + f'/tensorboard' 
         display.debug(f'log dir set to {cfg.paths["log_dir"]}')
-
-        cfg.paths['ckpt_dir'] = debug_dir + '/ckpt'
-        display.debug(f'checkpoint directory set to {cfg.paths["ckpt_dir"]}')
 
 
     return cfg, keywords
@@ -70,7 +67,7 @@ def load(path_str: str, debug=False):
 def set_defaults(cfg, keywords, debug=False):
     # set experiment name
     cfg.general['experiment_name'] = \
-        f'{keywords["timestamp"]}-{cfg.general["task"]}'
+        f'{cfg.general["task"]}/{keywords["timestamp"]}'
 
     # set general parameters
     cfg.general['seed'] = cfg.general.get(
@@ -82,7 +79,7 @@ def set_defaults(cfg, keywords, debug=False):
     cfg.paths['log_dir'] = cfg.general.get(
         'logdir_base',
         f'{files.project_root()}/tensorboard'
-    ).rstrip('/') + f'/{cfg.general["experiment_name"]}'
+    ).rstrip('/')
 
     cfg.paths.pop('logdir_base')
     cfg.general['load_checkpoint'] = \
@@ -90,16 +87,6 @@ def set_defaults(cfg, keywords, debug=False):
             'load_checkpoint',
             None
         )
-
-    # set default model parameters
-    cfg.params['device'] = cfg.params.get('device', 'cpu')
-    cfg.paths['ckpt_dir'] = (
-        cfg.paths.get(
-            'ckpt_dir', 
-            f'files.get_project_root()/checkpoints'
-        ).rstrip('/') + \
-        f'/{cfg.general["experiment_name"]}'
-    )
 
     # set default optim parameters
     cfg.params['lr'] = float(cfg.params.get('lr', 1e-3))

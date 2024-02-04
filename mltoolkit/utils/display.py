@@ -68,5 +68,5 @@ def note(msg: str, end='\n'):
 def in_progress(msg: str, end='\n'):
     with_header(msg, 'IN PROGRESS', color='blue', end=end)
 
-def done(end='\n'):
-    with_header('', 'DONE', color='green', end=end)
+def done(msg='', end='\n'):
+    with_header(msg, 'DONE', color='green', end=end)
