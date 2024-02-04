@@ -424,8 +424,8 @@ class Trainer:
                     prog_bar.update()
                 self.step_counter += 1
 
-                for sched in self.sched_keys:
-                    self.train_vars[sched].step()
+            for sched in self.sched_keys:
+                self.train_vars[sched].step()
 
         if self.accel.is_main_process:
             prog_bar.close()
