@@ -2,6 +2,7 @@
 
 from .mnist_mlp import TaskMNIST
 from .autolm import TaskAutoLM
+from .neuron_skip_mlp import TaskNeuronSkipMLP
 from mltoolkit.utils import display
 
 def select_task(cfg, keywords, debug):
@@ -21,6 +22,8 @@ def select_task(cfg, keywords, debug):
         return TaskMNIST(cfg, keywords, debug=debug)
     if task_name == 'autolm':
         return TaskAutoLM(cfg, keywords, debug=debug)
+    if task_name == 'neuron_skip_mlp':
+        return TaskNeuronSkipMLP(cfg, keywords, debug=debug)
     else:
         display.error(f'invalid task name: {task_name}')
         raise ValueError()

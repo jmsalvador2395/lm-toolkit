@@ -4,58 +4,54 @@ paths:
   results: "{{project_root}}/results"
   
 general: 
-  task: "autolm"
+  task: "neuron_skip_mlp"
   seed: 125
   note: "a quick note about this training run. this note will show up in tensorboard."
 
 params:
-  save_criterion: "min"
+  save_criterion: "max"
   save_checkpoint: True
 
   # model params
-  d_embed: 2048
-  n_transformer_layers: 6
-  n_head: 8
-  dropout: .05
-  dim_feed_forward:  2048
-  tokenizer: "bert-base-uncased"
-  seq_len: 256
-  dtype: "bfloat16"
+  in_size: 784
+  hidden_dim: 500
+  dropout: 0.05
+  num_classes: 10
 
   # optimizer params
-  lr: 1.0e-4
-  weight_decay: 6.0e-4
+  lr: .005
+  weight_decay: 0
   beta1: .9
   beta2: .999
   eps: 1.0e-8
   clip_max_norm: 1
 
   # optimizer scheduler
-  sched_step_size: 1
-  sched_gamma: 0.95
+  sched_step_size: 4
+  sched_gamma: 0.999
 
   # data params
-  num_proc: 30
+  num_proc: 20
   shuffle: True
-  batch_size: 42
-  num_epochs: 4
-  eval_freq: 200
-  log_freq: 50
-  train_test_split: .995
+  batch_size: 1024
+  num_epochs: 30
+  eval_freq: 50
+  log_freq: 10
 
   # misc options
-  skip_first_eval: False
+  skip_first_eval: True
 
 # Used for hyperparameter search.
 # For each parameter, if "num_samples" isn't specified, 
 # only the values specificed in the "values" argument will be used
 search_params:
-  # search settings
   search_type: 'grid'
-  step_limit: 1000
-
-  # search params
+  step_limit: null
+  lr: 
+    values: [1.0e-5, 1.0e-3]
+    num_samples: 5
+    dtype: "float"
   weight_decay:
-    values: [1.0e-7, 1.0e-3]
-    num_samples: 10
+    values: [1.0e-7, 1.0e-5]
+    num_samples: 2
     dtype: "float"

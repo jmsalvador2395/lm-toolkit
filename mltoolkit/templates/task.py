@@ -140,7 +140,7 @@ class Task:
                 os._exit(0)
             except Exception as e:
                 display.error(
-                    f'Exception occured during training. at parameter set {i}'
+                    f'Exception occured during training. at search step: {i}'
                 )
                 traceback.print_exception(e)
                 os._exit(1)
