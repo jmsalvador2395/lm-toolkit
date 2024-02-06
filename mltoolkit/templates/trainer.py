@@ -296,11 +296,11 @@ class Trainer:
         self.accel.wait_for_everyone()
 
         # initialize directory-related vars
+        ckpt_dir = cfg.paths['results'] + f'/{self.experiment_name}'
+        if exp_num is not None:
+            ckpt_dir = files.dirname(ckpt_dir)
         if self.accel.is_main_process:
             self.writer = self._setup_tensorboard()
-            ckpt_dir = cfg.paths['results'] + f'/{self.experiment_name}'
-            if exp_num is not None:
-                ckpt_dir = files.dirname(ckpt_dir)
             if save_ckpt:
                 files.create_path(ckpt_dir)
         self.accel.wait_for_everyone()
@@ -386,29 +386,26 @@ class Trainer:
                 if (self.step_counter % eval_freq) == 0 and not skip:
 
                     model_score, eval_metrics = self.evaluation_procedure()
-                    self.accel.wait_for_everyone()
 
                     if self.accel.is_main_process:
                         self._log(self.writer, eval_metrics, self.step_counter, mode='val')
 
-                        # save model state dictionary
-                        if self.save_criterion(model_score, local_best_score):
-                            local_best_score = model_score
-                            if save_ckpt and self.save_criterion(local_best_score, global_best_score):
-                                # update trackers
-                                last_ckpt = self.step_counter
-                                global_best_score = local_best_score
-                                for model in self.model_keys:
-                                    self.accel.save_model(
-                                        self.train_vars[model],
-                                        f'{ckpt_dir}/{model}-best_model',
-                                        max_shard_size="1GB",
-                                        safe_serialization=True
-                                    )
+                    # save model state dictionary
+                    if self.save_criterion(model_score, local_best_score):
+                        local_best_score = model_score
+                        if save_ckpt and self.save_criterion(local_best_score, global_best_score):
+                            # update trackers
+                            last_ckpt = self.step_counter
+                            global_best_score = local_best_score
+                            for model in self.model_keys:
+                                self.accel.save_model(
+                                    self.train_vars[model],
+                                    f'{ckpt_dir}/{model}-best_model',
+                                    max_shard_size="1GB",
+                                    safe_serialization=True
+                                )
 
-                    # force all other processes to wait for final evaluation
                     self.accel.wait_for_everyone()
-                            
 
                 if step_limit is not None and step_limit == self.step_counter:
                     if self.accel.is_main_process:
