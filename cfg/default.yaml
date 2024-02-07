@@ -53,10 +53,10 @@ search_params:
   weight_decay:
     values: [1.0e-7, 1.0e-5]
     dtype: "float"
-  sched_step_size: 
-    values: [2, 5, 10]
-    dtype: "int"
   sched_gamma: 
     values: [.98, .9]
     num_samples: 10
     dtype: "float"
+  sched_step_size: 
+    values: [20, 50, 100]
+    dtype: "int"
