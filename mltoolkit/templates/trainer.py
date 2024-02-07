@@ -350,6 +350,9 @@ class Trainer:
                 # perform optimization step
                 self.optim_step(loss)
 
+                """
+                do logging with just main process
+                """
                 if self.accel.is_main_process:
 
                     # update metrics on progress bar
@@ -382,7 +385,9 @@ class Trainer:
 
                         self._log(self.writer, trn_metrics, self.step_counter, mode='train')
 
-                # log evaluation statistics
+                """
+                do evaluation procedure, log, and save model
+                """
                 if (self.step_counter % eval_freq) == 0 and not skip:
 
                     last_score, eval_metrics = self.evaluation_procedure()
@@ -407,9 +412,11 @@ class Trainer:
                                     max_shard_size="5GB",
                                     safe_serialization=True
                                 )
-                    else:
-                        print('skipped saving')
 
+                """
+                check if manual step limit has been reached.
+                only enters this block if step_limit is defined
+                """
                 if step_limit is not None and step_limit == self.step_counter:
                     if self.accel.is_main_process:
                         display.done(f'Step limit reached. best model score: {local_best_score}')
