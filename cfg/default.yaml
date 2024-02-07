@@ -19,7 +19,7 @@ params:
   num_classes: 10
 
   # optimizer params
-  lr: .005
+  lr: .001
   weight_decay: 0
   beta1: .9
   beta2: .999
@@ -27,7 +27,7 @@ params:
   clip_max_norm: 1
 
   # optimizer scheduler
-  sched_step_size: 4
+  sched_step_size: 5
   sched_gamma: 0.999
 
   # data params
@@ -49,9 +49,14 @@ search_params:
   step_limit: null
   lr: 
     values: [1.0e-5, 1.0e-3]
-    num_samples: 5
     dtype: "float"
   weight_decay:
     values: [1.0e-7, 1.0e-5]
-    num_samples: 2
+    dtype: "float"
+  sched_step_size: 
+    values: [2, 5, 10]
+    dtype: "int"
+  sched_gamma: 
+    values: [.98, .9]
+    num_samples: 10
     dtype: "float"

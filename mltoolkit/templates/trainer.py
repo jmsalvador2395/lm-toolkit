@@ -385,33 +385,36 @@ class Trainer:
                 # log evaluation statistics
                 if (self.step_counter % eval_freq) == 0 and not skip:
 
-                    model_score, eval_metrics = self.evaluation_procedure()
+                    last_score, eval_metrics = self.evaluation_procedure()
 
                     if self.accel.is_main_process:
                         self._log(self.writer, eval_metrics, self.step_counter, mode='val')
 
                     # save model state dictionary
-                    if self.save_criterion(model_score, local_best_score):
-                        local_best_score = model_score
+                    if self.save_criterion(last_score, local_best_score):
+
+                        local_best_score = last_score
                         if save_ckpt and self.save_criterion(local_best_score, global_best_score):
+
                             # update trackers
                             last_ckpt = self.step_counter
                             global_best_score = local_best_score
                             for model in self.model_keys:
+                                self.accel.wait_for_everyone()
                                 self.accel.save_model(
                                     self.train_vars[model],
                                     f'{ckpt_dir}/{model}-best_model',
-                                    max_shard_size="1GB",
+                                    max_shard_size="5GB",
                                     safe_serialization=True
                                 )
-
-                    self.accel.wait_for_everyone()
+                    else:
+                        print('skipped saving')
 
                 if step_limit is not None and step_limit == self.step_counter:
                     if self.accel.is_main_process:
                         display.done(f'Step limit reached. best model score: {local_best_score}')
                     self.accel.wait_for_everyone()
-                    return local_best_score
+                    return last_score
 
                 # set skip value so it can enter back into the evaluation procedure
                 skip = False
@@ -430,5 +433,5 @@ class Trainer:
 
         """ end training section """
 
-        return local_best_score
+        return last_score
        

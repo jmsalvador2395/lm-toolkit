@@ -153,19 +153,20 @@ class Task:
                 temp_out.to_json(out_dir + '/scores.json')
 
             # compare and save
-            if accel.is_main_process and criterion(score, best_score):
+            if criterion(score, best_score):
                 best_score = score
                 save_step = i
-                files.create_path(out_dir)
-                with open(out_dir + '/best_config.yaml', 'w') as f:
-                    candidate_config.general.pop('experiment_name')
-                    f.write(yaml.dump(candidate_config._asdict()))
-                with open(out_dir + '/info.txt', 'w') as f:
-                    f.write(
-                        f'best model score: {best_score}\n'
-                        f'best model score found at step {save_step}\n'
-                        f'params: {temp_out[-1]}'
-                    )
+                if accel.is_main_process:
+                    files.create_path(out_dir)
+                    with open(out_dir + '/best_config.yaml', 'w') as f:
+                        candidate_config.general.pop('experiment_name')
+                        f.write(yaml.dump(candidate_config._asdict()))
+                    with open(out_dir + '/info.txt', 'w') as f:
+                        f.write(
+                            f'best model score: {best_score}\n'
+                            f'best model score found at step {save_step}\n'
+                            f'params: {temp_out[-1]}'
+                        )
 
             # update progbar
             if accel.is_main_process:
