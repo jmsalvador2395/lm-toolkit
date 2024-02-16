@@ -1,5 +1,7 @@
 # external imports
 import numpy as np
+import torch
+import random
 import itertools
 import yaml
 import json
@@ -26,6 +28,13 @@ class Task:
 
         self.trainer_cls = None
         self.task_name = '<<Template>>'
+
+        # seed the random number generators
+        seed = self.cfg.general['seed']
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+
 
     def train(self):
         if self.trainer_cls is None:

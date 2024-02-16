@@ -4,7 +4,7 @@ paths:
   results: "{{project_root}}/results"
   
 general: 
-  task: "neuron_skip_mlp"
+  task: "bert"
   seed: 125
   note: "a quick note about this training run. this note will show up in tensorboard."
 
@@ -13,30 +13,31 @@ params:
   save_checkpoint: True
 
   # model params
-  in_size: 784
-  hidden_dim: 500
+  d_model: 768
+  n_head: 12
+  n_layers: 1
+  dim_feedforward: 768
   dropout: 0.05
-  num_classes: 10
+  dtype: "bfloat16"
+  seq_len: 512
 
   # optimizer params
   lr: .001
   weight_decay: 0
-  beta1: .9
-  beta2: .999
-  eps: 1.0e-8
   clip_max_norm: 1
 
   # optimizer scheduler
-  sched_step_size: 5
+  sched_step_size: 1
   sched_gamma: 0.9
 
   # data params
   num_proc: 20
   shuffle: True
-  batch_size: 1024
+  batch_size: 10
   num_epochs: 30
   eval_freq: 50
   log_freq: 10
+  num_test_samples: 25
 
   # misc options
   skip_first_eval: True

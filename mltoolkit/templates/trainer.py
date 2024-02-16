@@ -51,12 +51,6 @@ class Trainer:
             display.error('cfg.paths[\'results\'] not set in config file')
             raise ValueError()
 
-        # seed the random number generators
-        seed = self.cfg.general['seed']
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        random.seed(seed)
-
     def _set_var_keys(self, train_vars):
         """
         identifies the dictionary keys in train_vars that identifiy Optimizers, LRSchedulers or Dataloaders
@@ -92,6 +86,27 @@ class Trainer:
         # collect training vars 
         self.train_vars = self.setup()
         self._set_var_keys(self.train_vars)
+
+        dtype = self.cfg.params.get('dtype', None)
+
+        # convert model to provided datatype
+        if dtype is not None:
+            if dtype == 'bfloat16':
+                dtype = torch.bfloat16
+            elif dtype == 'float32':
+                dtype = torch.float32
+            elif dtype == 'float16':
+                dtype = torch.float16
+            else:
+                display.error(
+                    f'dtype provided by config ({dtype}) model is not valid '
+                    f'please provide one of ["bfloat16", "float32", "float16", Null]'
+                )
+                raise ValueError()
+            for k, v in self.train_vars.items():
+                if issubclass(type(v), Module):
+                    self.train_vars[k] = v.to(dtype)
+            
 
         # run training vars through accelerate.prepare and repackage into self.train_vars dict
         prepped_vars = self.accel.prepare(*self.train_vars.values())
