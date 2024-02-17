@@ -4,7 +4,7 @@ import random
 import numpy as np
 
 from torch import Tensor
-from typing import List, Dict, Tuple, Optional, Iterable, Callable
+from typing import List, Dict, Tuple, Optional, Iterable, Callable, Any
 
 
 def get_dl_params(seed):
@@ -78,7 +78,7 @@ def count_trainable_params(model: nn.Module) -> int:
 
 def pad_and_vstack(tensors:     Iterable[Tensor], 
                    pad_dim:     int=0,
-                   pad_value:   int|float=0) -> Tensor:
+                   pad_value:   torch.dtype=0) -> Tensor:
     """
     pads a set of tensors along pad_dim using pad_value and then vertical stacks them
 
@@ -90,4 +90,30 @@ def pad_and_vstack(tensors:     Iterable[Tensor],
     Output:
     - Tensor: a single torch tensor
     """
-    breakpoint()
+
+    # get maximum for padding dim
+    dim_size = max([t.shape[pad_dim] for t in tensors])
+    
+    # pad
+    out_tensors = []
+    for t in tensors:
+        shape = list(t.shape)
+        pad_dim_size = dim_size - shape[pad_dim]
+        if pad_dim_size > 0:
+            shape[pad_dim] = dim_size - shape[pad_dim]
+            padding_tensor = torch.full(
+                shape,
+                pad_value,
+                dtype=t.dtype,
+            )
+            out_tensors.append(torch.cat(
+                [t, padding_tensor], 
+                dim=pad_dim
+            ))
+        else:
+            out_tensors.append(t)
+
+    # stack
+    out_tensors = torch.vstack(out_tensors)
+
+    return out_tensors
