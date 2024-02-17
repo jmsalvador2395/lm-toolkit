@@ -16,6 +16,7 @@ def get_dataloaders(cfg):
 
     ds = datasets.load_dataset('cifar100',
                                 cache_dir=cfg.paths['cache'],
+                                keep_in_memory=True,
                                 trust_remote_code=True,).with_format('pt')
 
     seed_worker, g = tensor_utils.get_dl_params(cfg.general['seed'])
@@ -27,6 +28,8 @@ def get_dataloaders(cfg):
         shuffle=True,
         worker_init_fn=seed_worker,
         generator=g,
+        persistent_workers=True,
+        pin_memory=True,
     )
 
     val_loader = DataLoader(
@@ -36,6 +39,8 @@ def get_dataloaders(cfg):
         shuffle=True,
         worker_init_fn=seed_worker,
         generator=g,
+        persistent_workers=True,
+        pin_memory=True,
     )
 
     return train_loader, val_loader

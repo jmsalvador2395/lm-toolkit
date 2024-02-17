@@ -39,7 +39,13 @@ class TrainerVitCls(Trainer):
 
         train_loader, val_loader = data_module.get_dataloaders(cfg)
 
-        model = VitCls(**cfg.params, n_cls=100)
+        d_model = cfg.params['patch_width'] * cfg.params['patch_height'] * 3
+
+        model = VitCls(
+            d_model=d_model,
+            n_cls=100,
+            **cfg.params, 
+        )
 
         # optimizer
         optimizer = torch.optim.AdamW(
