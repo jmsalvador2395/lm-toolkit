@@ -42,16 +42,9 @@ class TrainerBERT(Trainer):
         self.tokenizer = AutoTokenizer.from_pretrained(
             'bert-base-uncased'
         )
-        breakpoint()
 
-        model = BERT(
-            cfg.params['d_model'],
-            cfg.params['n_head'],
-            cfg.params['n_layers'],
-            len(self.tokenizer),
-            dim_feedforward=cfg.params['dim_feedforward'],
-            dropout=cfg.params['dropout'],
-        )
+        model = BERT(**cfg.params, n_vocab=len(self.tokenizer))
+        breakpoint()
 
         # optimizer
         optimizer = torch.optim.AdamW(

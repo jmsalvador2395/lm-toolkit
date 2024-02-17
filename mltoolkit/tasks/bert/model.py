@@ -10,7 +10,10 @@ from sentence_transformers import SentenceTransformer
 
 # local imports
 from mltoolkit.nn_modules import PositionalEncoding
-from mltoolkit.utils import display
+from mltoolkit.utils import (
+    display,
+    tensor_utils,
+)
 
 class BERT(nn.Module):
     def __init__(self,
@@ -24,9 +27,12 @@ class BERT(nn.Module):
                  norm_first=False,
                  bias=True,
                  device=None,
-                 dtype=None):
+                 dtype=None,
+                 **kwargs):
 
         super(BERT, self).__init__()
+
+        dtype = tensor_utils.get_dtype(dtype)
 
         layer = nn.TransformerEncoderLayer(
             d_model,

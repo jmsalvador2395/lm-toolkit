@@ -6,6 +6,8 @@ import numpy as np
 from torch import Tensor
 from typing import List, Dict, Tuple, Optional, Iterable, Callable, Any
 
+from . import display
+
 
 def get_dl_params(seed):
     """
@@ -77,9 +79,9 @@ def count_trainable_params(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def pad_and_stack(tensors:     Iterable[Tensor], 
-                   stack_dim:   int=0,
-                   pad_dim:     int=0,
-                   pad_value:   torch.dtype=0) -> Tensor:
+                  stack_dim:   int=0,
+                  pad_dim:     int=0,
+                  pad_value:   torch.dtype=0) -> Tensor:
     """
     pads a set of tensors along pad_dim using pad_value and then vertical stacks them along stack_dim
 
@@ -120,3 +122,27 @@ def pad_and_stack(tensors:     Iterable[Tensor],
     out_tensors = torch.cat(out_tensors, dim=stack_dim)
 
     return out_tensors
+
+def get_dtype(dtype_str: str) -> torch.dtype:
+    """
+    takes in a string and returns the corresponding torch dtype
+
+    Input:
+    - dtype_str[str]: the datatype specified as a string
+
+    Output:
+    - torch.dtype: the specified datatype
+    """
+    dtypes = {
+        'float32': torch.float32,
+        'float16': torch.float16,
+        'bfloat16': torch.bfloat16,
+        'bool': torch.bool,
+    }
+    dtype = dtypes.get(dtype_str, None)
+
+    if dtype is None:
+        display.error(f'provided dtype ({dtype_str}) is invalid')
+        raise ValueError()
+
+    return dtype
