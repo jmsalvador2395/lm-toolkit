@@ -351,7 +351,7 @@ class Trainer:
         if self.accel.is_main_process:
             display.title('Begin Training', fill_char='-')
             if step_limit is not None:
-                bar_range = min(total_steps, step_limit)
+                bar_range = step_limit
             else:
                 bar_range = total_steps
             prog_bar = tqdm(
