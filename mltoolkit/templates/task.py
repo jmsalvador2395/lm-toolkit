@@ -44,6 +44,7 @@ class Task:
             trainer = self.trainer_cls(self.cfg, debug=self.debug)
             trainer.train()
 
+    """
     def param_search(self):
         if self.trainer_cls is None:
             display.error('self.trainer_cls needs to be assigned before search procedure can execute')
@@ -55,35 +56,45 @@ class Task:
         elif search_proc == 'random':
             display.error(f'Random search procedure not implemented yet')
             raise NotImplementedError()
+    """
 
-    def _grid_search(self):
-        accel = Accelerator()
-        cfg = self.cfg
-
-        search_params = deepcopy(cfg.search_params)
-        out_dir = cfg.paths['results'] + '/' + cfg.general['experiment_name']
-
-        # pop the search settings
-        step_limit = search_params.pop('step_limit')
-        search_params.pop('search_type')
-
-        # set save criterion
-        save_criterion = cfg.params.get('save_criterion', None)
-
-        # set initial score that's guaranteed to be overwritten
-        best_score = float('-inf') if save_criterion == 'max' else float('inf')
-        bad_score = best_score
-
-        save_step = -1
-        if save_criterion == 'max':
-            criterion = lambda cur, prev: cur > prev
-        elif save_criterion == 'min':
-            criterion = lambda cur, prev: cur < prev
-        else:
-            display.error('cfg.params[save_criterion] not specified choose from: ["max", "min"]')
+    def _random_search(self, search_params):
+        search_space = {}
+        try:
+            steps = search_params.pop('search_steps')
+        except Exception as e:
+            display.error('random search strategy selected but search steps not set')
             raise ValueError()
+        for param, param_dict in search_params.items():
+            dtype = param_dict['dtype']
+            values = param_dict['values']
+            if 'num_samples' in param_dict:
+                if dtype == 'float':
+                    samples = np.random.uniform(
+                        values[0],
+                        values[-1],
+                        (steps,)
+                    )
+                elif dtype == 'int':
+                    samples = np.random.randint(
+                        values[0],
+                        values[-1],
+                        (steps,)
+                    )
+                else:
+                    raise ValueError(f'dtype "{dtype}" is not valid')
+            else:
+                samples = np.random.choice(values, (steps,))
+            search_space[param] = samples.tolist()
 
+        params = list(search_params.keys())
+        search_space = [val for val in zip(*search_space.values())]
+        return params, search_space
+    
+    def _grid_search(self, search_params):
         # build lists/arrays of search parameters
+        if 'search_steps' in search_params:
+            search_params.pop('search_steps')
         for param in search_params.keys():
             vals = search_params[param]['values']
             n_samples = search_params[param].get('num_samples', None)
@@ -102,22 +113,65 @@ class Task:
 
             search_params[param] = param_arr.tolist()
 
+        params = list(search_params.keys())
+        search_space = list(itertools.product(*search_params.values()))
+
+        return params, search_space
+        
+
+    #def _grid_search(self):
+    def param_search(self):
+        accel = Accelerator()
+        cfg = self.cfg
+
+        search_params = deepcopy(cfg.search_params)
+        out_dir = cfg.paths['results'] + '/' + cfg.general['experiment_name']
+
+        # pop the search settings
+        step_limit = search_params.pop('train_step_limit')
+        strategy = search_params.pop('search_type')
+
+        # set save criterion
+        save_criterion = cfg.params.get('save_criterion', None)
+
+        # set initial score that's guaranteed to be overwritten
+        best_score = float('-inf') if save_criterion == 'max' else float('inf')
+        bad_score = best_score
+
+        save_step = -1
+        if save_criterion == 'max':
+            criterion = lambda cur, prev: cur > prev
+        elif save_criterion == 'min':
+            criterion = lambda cur, prev: cur < prev
+        else:
+            display.error('cfg.params[save_criterion] not specified choose from: ["max", "min"]')
+            raise ValueError()
+
+        # build search space
+        if strategy == 'grid':
+            params, search_space = self._grid_search(search_params)
+        elif strategy == 'random':
+            params, search_space = self._random_search(search_params)
+        else:
+            display.error(
+                f'invalid search strategy "{strategy}". '
+                f'choose either "grid" or "random"'
+            )
+            raise ValueError()
+        
         # initialize tracking vars
         candidates = []
         scores = []
-
-        params = list(search_params.keys())
-        search_space = list(itertools.product(*search_params.values()))
         out_ds = []
         for param_set in search_space:
             out_ds.append({name: val for name, val in zip(params, param_set)})
         out_ds = Dataset.from_list(out_ds)
 
         if accel.is_main_process:
-            display.title('Begin Gridsearch')
+            display.title(f'Begin {strategy.title()}Search')
             prog_bar = tqdm(
                 range(len(search_space)),
-                desc='in gridsearch procedure',
+                desc=f'in {strategy} search',
             )
 
         # main loop for hyperparameter search

@@ -40,9 +40,17 @@ class TrainerVitCls(Trainer):
         train_loader, val_loader = data_module.get_dataloaders(cfg)
 
         d_model = cfg.params['patch_width'] * cfg.params['patch_height'] * 3
+        im_shape = np.array(cfg.params['image_shape'])
+        patch_shape = np.array([
+            cfg.params['patch_width'], 
+            cfg.params['patch_height'],
+            3,
+        ])
+        seq_len = np.prod(im_shape)//np.prod(patch_shape)
 
         model = VitCls(
             d_model=d_model,
+            seq_len=seq_len,
             n_cls=100,
             **cfg.params, 
         )

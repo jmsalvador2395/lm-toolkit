@@ -101,7 +101,11 @@ class VitCls(nn.Module):
             layer,
             n_layers,
         )
-        self.classifier = nn.Linear(d_model, n_cls)
+        self.classifier = nn.Sequential(
+            nn.Linear(d_model, dim_feedforward),
+            nn.GELU(),
+            nn.Linear(dim_feedforward, n_cls)
+        )
 
     def forward(self, X):
         """
