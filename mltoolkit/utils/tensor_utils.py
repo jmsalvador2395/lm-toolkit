@@ -76,14 +76,16 @@ def count_trainable_params(model: nn.Module) -> int:
     """
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-def pad_and_vstack(tensors:     Iterable[Tensor], 
+def pad_and_stack(tensors:     Iterable[Tensor], 
+                   stack_dim:   int=0,
                    pad_dim:     int=0,
                    pad_value:   torch.dtype=0) -> Tensor:
     """
-    pads a set of tensors along pad_dim using pad_value and then vertical stacks them
+    pads a set of tensors along pad_dim using pad_value and then vertical stacks them along stack_dim
 
     Input:
     - tensors[Iterable[Tensor]]: a collection of tensors
+    - stack_dim[int]: the dimension to stack along
     - pad_dim[int]: the dimension that you want to apply padding along (default: 0)
     - pad_value: the value to pad with (default: 0)
 
@@ -94,7 +96,7 @@ def pad_and_vstack(tensors:     Iterable[Tensor],
     # get maximum for padding dim
     dim_size = max([t.shape[pad_dim] for t in tensors])
     
-    # pad
+    # pad and add to out_tensors list
     out_tensors = []
     for t in tensors:
         shape = list(t.shape)
@@ -105,6 +107,7 @@ def pad_and_vstack(tensors:     Iterable[Tensor],
                 shape,
                 pad_value,
                 dtype=t.dtype,
+                device=t.device,
             )
             out_tensors.append(torch.cat(
                 [t, padding_tensor], 
@@ -114,6 +117,6 @@ def pad_and_vstack(tensors:     Iterable[Tensor],
             out_tensors.append(t)
 
     # stack
-    out_tensors = torch.vstack(out_tensors)
+    out_tensors = torch.cat(out_tensors, dim=stack_dim)
 
     return out_tensors
