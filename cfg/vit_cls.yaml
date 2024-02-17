@@ -1,0 +1,68 @@
+paths:
+  logdir_base: "{{project_root}}/tensorboard"
+  cache: "{{project_root}}/data/cache"
+  results: "{{project_root}}/results"
+  
+general: 
+  task: "vit_cls"
+  seed: 125
+  note: "a quick note about this training run. this note will show up in tensorboard."
+
+params:
+  save_criterion: "max"
+  save_checkpoint: True
+
+  # model params
+  d_model: 48 # the patch size
+  n_head: 12
+  n_layers: 6
+  dim_feedforward: 768
+  dropout: 0.05
+  seq_len: 64
+  patch_width: 4
+  patch_height: 4
+  dtype: "bfloat16"
+
+  # optimizer params
+  lr: .001889
+  weight_decay: 0
+  clip_max_norm: 1
+
+  # optimizer scheduler
+  sched_step_size: 20
+  sched_gamma: 0.9
+
+  # data params
+  num_proc: 20
+  shuffle: True
+  batch_size: 128
+  num_epochs: 30
+  eval_freq: 250
+  log_freq: 250
+
+  # misc options
+  skip_first_eval: True
+
+# Used for hyperparameter search.
+# For each parameter, if "num_samples" isn't specified, 
+# only the values specificed in the "values" argument will be used
+search_params:
+  search_type: 'grid'
+  step_limit: 2000
+  weight_decay:
+    values: [1.0e-7, 1.0e-5]
+    dtype: "float"
+  lr: 
+    values: [.001889, 2.0e-3]
+    num_samples: 10
+    dtype: "float"
+  batch_size:
+    values: [256, 512, 1024]
+    dtype: "int"
+#  sched_step_size: 
+#    values: [10, 15]
+#    dtype: "int"
+#  sched_gamma:
+#    values: [.98, .9]
+#    num_samples: 10
+#    dtype: "float"

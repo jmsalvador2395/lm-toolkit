@@ -144,6 +144,7 @@ class Task:
                     global_best_score=best_score,
                     exp_num=i,
                 )
+                accel.free_memory()
             except KeyboardInterrupt:
                 display.done('Keyboard interrupt detected')
                 os._exit(0)

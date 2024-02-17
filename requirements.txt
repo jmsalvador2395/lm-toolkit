@@ -22,3 +22,4 @@ tokenizers
 torch
 tqdm
 transformers
+torchvision

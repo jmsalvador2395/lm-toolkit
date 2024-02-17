@@ -330,6 +330,10 @@ class Trainer:
         skip = cfg.params['skip_first_eval']
         last_ckpt = 0
 
+        if step_limit is not None:
+            # set num epochs to even out step numbers during search
+            num_epochs = 1_000_000_000_000 
+
         # automatically set starting point for best model score based on "save_criterion() function"
         local_best_score = float('inf')
         if self.save_criterion(1, 0):
