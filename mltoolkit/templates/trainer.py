@@ -6,6 +6,7 @@ import numpy as np
 import random
 import traceback
 import os
+import gc
 from copy import deepcopy
 from accelerate import Accelerator
 from accelerate.state import AcceleratorState
@@ -85,6 +86,7 @@ class Trainer:
         """
         # collect training vars 
         self.train_vars = self.setup()
+        self.accel.wait_for_everyone()
         self._set_var_keys(self.train_vars)
 
         dtype = self.cfg.params.get('dtype', None)
@@ -283,10 +285,14 @@ class Trainer:
                              leave=False):
                     metric_lists[loader_key].append(self.eval_step(batch, loader_key))
             else:
+                for batch in self.train_vars[loader_key]:
+                    metric_lists[loader_key].append(self.eval_step(batch, loader_key))
+                """
                 metric_lists[loader_key] = [
                     self.eval_step(batch, loader_key) 
                     for batch in self.train_vars[loader_key]
                 ]
+                """
             
         if cr:
             print('\r')
@@ -439,6 +445,7 @@ class Trainer:
                 if step_limit is not None and step_limit == self.step_counter:
                     if self.accel.is_main_process:
                         display.done(f'Step limit reached. best model score: {local_best_score}')
+                        self.writer.close()
                     self.accel.wait_for_everyone()
                     return last_score
 
@@ -456,6 +463,7 @@ class Trainer:
         if self.accel.is_main_process:
             prog_bar.close()
             display.title('Finished Training', fill_char='-')
+            self.writer.close()
 
         """ end training section """
 

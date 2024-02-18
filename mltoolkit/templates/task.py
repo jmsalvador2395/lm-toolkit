@@ -7,6 +7,7 @@ import yaml
 import json
 import traceback
 import os
+import gc
 from tqdm import tqdm
 from copy import deepcopy
 from accelerate import Accelerator
@@ -82,7 +83,8 @@ class Task:
                         (steps,)
                     )
                 else:
-                    raise ValueError(f'dtype "{dtype}" is not valid')
+                    display.error(f'dtype "{dtype}" is not valid')
+                    raise ValueError()
             else:
                 samples = np.random.choice(values, (steps,))
             search_space[param] = samples.tolist()
@@ -168,7 +170,7 @@ class Task:
         out_ds = Dataset.from_list(out_ds)
 
         if accel.is_main_process:
-            display.title(f'Begin {strategy.title()}Search')
+            display.title(f'Begin {strategy.title()} Search')
             prog_bar = tqdm(
                 range(len(search_space)),
                 desc=f'in {strategy} search',
@@ -199,6 +201,8 @@ class Task:
                     exp_num=i,
                 )
                 accel.free_memory()
+                del trainer
+                gc.collect()
             except KeyboardInterrupt:
                 display.done('Keyboard interrupt detected')
                 os._exit(0)

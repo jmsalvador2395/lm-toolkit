@@ -67,14 +67,15 @@ class VitCls(nn.Module):
                  norm_first=False,
                  bias=True,
                  device=None,
-                 dtype=None,
                  **kwargs):
 
         super(VitCls, self).__init__()
 
-        dtype = tensor_utils.get_dtype(dtype)
+        patch_size = patch_width*patch_height*3
 
         self.patchify = Patchifier(patch_width, patch_height)
+
+        self.proj = nn.Linear(patch_size, d_model)
 
         self.cls_emb = nn.Parameter(torch.randn(d_model, requires_grad=True))
 
@@ -95,7 +96,6 @@ class VitCls(nn.Module):
             norm_first=norm_first,
             bias=bias,
             device=device,
-            dtype=dtype,
         )
         self.transformer = nn.TransformerEncoder(
             layer,
@@ -112,9 +112,11 @@ class VitCls(nn.Module):
         returns classification scores
         """
 
-        # patchify
+        # patchify, normalize, and project
         patches = self.patchify(X)
+        patches = self.proj(patches)
         B, S, d = patches.shape
+
 
         # add cls embedding
         patches = torch.cat(

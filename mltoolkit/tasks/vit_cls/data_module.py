@@ -7,7 +7,10 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torchvision.transforms.functional import pil_to_tensor
 
-from mltoolkit.utils import tensor_utils
+from mltoolkit.utils import (
+    tensor_utils,
+    files,
+)
 
 def get_dataloaders(cfg):
     """
@@ -28,8 +31,8 @@ def get_dataloaders(cfg):
         shuffle=True,
         worker_init_fn=seed_worker,
         generator=g,
-        persistent_workers=True,
-        pin_memory=True,
+        #persistent_workers=True,
+        #pin_memory=True,
     )
 
     val_loader = DataLoader(
@@ -39,8 +42,8 @@ def get_dataloaders(cfg):
         shuffle=True,
         worker_init_fn=seed_worker,
         generator=g,
-        persistent_workers=True,
-        pin_memory=True,
+        #persistent_workers=True,
+        #pin_memory=True,
     )
 
     return train_loader, val_loader
