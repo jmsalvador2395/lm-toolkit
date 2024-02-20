@@ -5,7 +5,7 @@ paths:
   
 general: 
   task: "vit_cls"
-  seed: 125
+  seed: 126
   note: "a quick note about this training run. this note will show up in tensorboard."
 
 params:
@@ -13,23 +13,25 @@ params:
   save_checkpoint: True
 
   # model params
+  d_model: 768
   n_head: 12
-  n_layers: 12
+  n_layers: 6
   dim_feedforward: 768
-  dropout: 0.05
+  dropout: 0.1
   image_shape: [32, 32, 3]
   patch_width: 4
   patch_height: 4
+  normalize_factor: 256
   dtype: "bfloat16"
 
   # optimizer params
-  lr: 0.0019136666666666668
-  weight_decay: 1.0e-7
+  lr: 3.596055e-4
+  weight_decay: 2.5741e-6
   clip_max_norm: 1
 
   # optimizer scheduler
   sched_step_size: 20
-  sched_gamma: 0.9
+  sched_gamma: 0.95813
 
   # data params
   num_proc: 24
@@ -50,11 +52,11 @@ search_params:
   search_steps: 60
   train_step_limit: 2000
   weight_decay:
-    values: [1.0e-7, 1.0e-5]
+    values: [1.0e-7, 1.0e-4]
     num_samples: 10
     dtype: "float"
   lr: 
-    values: [0.0019136666666666668, 2.0e-3]
+    values: [1.0e-5, 2.0e-3]
     num_samples: 10
     dtype: "float"
   batch_size:

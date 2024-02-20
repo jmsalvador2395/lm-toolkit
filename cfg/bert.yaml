@@ -12,9 +12,12 @@ params:
   save_criterion: "max"
   save_checkpoint: True
 
+  # bert params
+  next_sent_prob: .5
+
   # model params
   d_model: 768
-  n_head: 12
+  n_head: 1
   n_layers: 1
   dim_feedforward: 768
   dropout: 0.05

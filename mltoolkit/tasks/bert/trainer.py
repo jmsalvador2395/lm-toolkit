@@ -44,7 +44,6 @@ class TrainerBERT(Trainer):
         )
 
         model = BERT(**cfg.params, n_vocab=len(self.tokenizer))
-        breakpoint()
 
         # optimizer
         optimizer = torch.optim.AdamW(
@@ -73,7 +72,26 @@ class TrainerBERT(Trainer):
 
     def step(self, batch: T, mode='train'):
 
-        tokens = self.tokenizer(batch['text'],
+        # set some vars
+        mode = 'train' if mode == 'train' else 'validation'
+        bs = len(batch['text'])
+        dslen = len(self.ds[mode])
+
+        # set up nsp
+        ns_ids = batch['row_id']+1
+        ns_mask = torch.rand((bs,), device=ns_ids.device) > self.cfg.params['next_sent_prob']
+        ns_ids[ns_mask] = torch.randint(
+            0,
+            dslen,
+            (torch.sum(ns_mask),),
+            device=ns_ids.device
+        )
+        next_sents = self.ds[mode][ns_ids]['text']
+        ns_labels = ~ns_mask
+
+        paired_sents = [s1 + '[SEP]' + s2 for s1, s2 in zip(batch['text'], next_sents)]
+
+        tokens = self.tokenizer(paired_sents,#batch['text'],
                                 truncation=True,
                                 max_length=self.cfg.params['seq_len'],
                                 return_token_type_ids=False,
@@ -81,12 +99,22 @@ class TrainerBERT(Trainer):
                                 return_tensors='pt').to(self.accel.device)
 
         # TODO mask tokens
+        labels = tokens['input_ids']
+        X, Y = torch.where(tokens['input_ids'] == self.tokenizer.sep_token_id)
+        X = X[range(0, len(X), 2)]
+        Y = Y[range(0, len(Y), 2)]
+
+        breakpoint()
+
+        mlm_mask = None
+
 
         # TODO pick the tokens that will be trained on
 
         mlm_scores, nsp_scores = self.train_vars['bert'](**tokens)
 
         # TODO compute_loss
+        nsp_loss = loss_fn2(nsp_scores, ns_labels)
 
         breakpoint()
 

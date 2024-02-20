@@ -124,13 +124,12 @@ class VitCls(nn.Module):
             dim=1
         )
 
-        # apply position embeddings and classify
+        # apply position embeddings and feed to transformer
         patches += self.pos
         scores = self.transformer(patches)
-        scores = self.classifier(scores)
-
         
-        # extract cls embedding
+        # extract cls embedding and classify
         scores = scores[:, 0, :]
+        scores = self.classifier(scores)
 
         return scores

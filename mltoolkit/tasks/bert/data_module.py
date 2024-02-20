@@ -15,7 +15,16 @@ def get_dataloaders(cfg):
     retrieves dataset and converts to dataloaders
     """
 
-    ds = combine_datasets(cfg)
+    trgt_dir = cfg.paths['cache'] + '/pg19_plus_wiki'
+    try:
+        ds = datasets.load_from_disk(trgt_dir)
+        ds_loaded = True
+    except Exception as e:
+        ds_loaded = False
+
+    if not ds_loaded:
+        ds = combine_datasets(cfg)
+        ds.save_to_disk(trgt_dir)
 
     ds_for_dl = ds.filter(
         lambda x: x['last_sent_flag'] == False,
