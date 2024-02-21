@@ -59,8 +59,7 @@ class TrainerBERT(Trainer):
             gamma=cfg.params['sched_gamma'],
         )
 
-        self.loss_fn1 = nn.CrossEntropyLoss()
-        self.loss_fn2 = nn.CrossEntropyLoss()
+        self.loss_fn = nn.CrossEntropyLoss()
 
         return {
             'bert': model,
@@ -89,36 +88,76 @@ class TrainerBERT(Trainer):
         next_sents = self.ds[mode][ns_ids]['text']
         ns_labels = ~ns_mask
 
+        # pair sentences
         paired_sents = [s1 + '[SEP]' + s2 for s1, s2 in zip(batch['text'], next_sents)]
 
-        tokens = self.tokenizer(paired_sents,#batch['text'],
+        tokens = self.tokenizer(paired_sents,
                                 truncation=True,
                                 max_length=self.cfg.params['seq_len'],
                                 return_token_type_ids=False,
                                 padding=True,
                                 return_tensors='pt').to(self.accel.device)
 
-        # TODO mask tokens
+        # filter out examples that don't fit both sentences
+        valid_samples = torch.sum(tokens['input_ids'] == self.tokenizer.sep_token_id, dim=-1) == 2
+        if not torch.all(valid_samples):
+            tokens['input_ids'] = tokens['input_ids'][valid_samples]
+            tokens['attention_mask'] = tokens['attention_mask'][valid_samples]
+            ns_labels = ns_labels[valid_samples]
+
+        # make segment ids
         labels = tokens['input_ids']
-        X, Y = torch.where(tokens['input_ids'] == self.tokenizer.sep_token_id)
-        X = X[range(0, len(X), 2)]
-        Y = Y[range(0, len(Y), 2)]
+        rows, cols = torch.where(tokens['input_ids'] == self.tokenizer.sep_token_id)
+        rows = rows[range(0, len(rows), 2)]
+        cols = cols[range(0, len(cols), 2)]
 
-        breakpoint()
+        segment_ids = torch.zeros_like(tokens['input_ids'])
+        segment_ids[rows, cols+1] = 1
+        segment_ids = torch.cumsum(segment_ids, dim=-1)
 
-        mlm_mask = None
 
+        # TODO mask tokens
+        mlm_labels = tokens['input_ids'].clone()
+        mlm_targets = np.random.rand(*tokens['input_ids'].shape) < self.cfg.params['mlm_prob']
+        mlm_targets *= tokens['attention_mask'].to(torch.bool).cpu().numpy()
 
-        # TODO pick the tokens that will be trained on
+        # do masking and replacement
+        target_types = np.random.choice(
+            [1, 2, 3],
+            size=tokens['input_ids'].shape,
+            p=self.cfg.params['mask_replace_keep_dist'],
+        )
+        target_types *= mlm_targets
+        num_replace = np.sum(target_types == 2)
 
-        mlm_scores, nsp_scores = self.train_vars['bert'](**tokens)
+        # to masking
+        tokens['input_ids'][target_types == 1] = self.tokenizer.mask_token_id
 
-        # TODO compute_loss
-        nsp_loss = loss_fn2(nsp_scores, ns_labels)
+        # do token replacement
+        tokens['input_ids'][target_types == 2] = torch.randint(
+            0, 
+            len(self.tokenizer), 
+            (num_replace,),
+            device=tokens['input_ids'].device,
+        )
 
-        breakpoint()
+        mlm_scores, nsp_scores = self.train_vars['bert'](**tokens, segment_ids=segment_ids)
 
-        return loss, perplexity
+        # compute_loss
+        nsp_loss = self.loss_fn(nsp_scores, ns_labels.to(torch.int64))
+
+        if not np.any(mlm_targets):
+            breakpoint()
+        mlm_targets = torch.tensor(mlm_targets, device=mlm_scores.device)
+        mlm_loss = self.loss_fn(mlm_scores[mlm_targets], mlm_labels[mlm_targets])
+
+        loss = mlm_loss + nsp_loss
+
+        return (
+            loss,
+            float(mlm_loss),
+            float(nsp_loss),
+        )
 
     def train_step(self, batch: T) -> Tuple[torch.Tensor, Dict]:
         """
@@ -134,12 +173,13 @@ class TrainerBERT(Trainer):
                 refer to {project_root}/mltoolkit/trainers/base.py for the currently supported keyword trackers
         """
 
-        loss, perplexity = self.step(batch, mode='train')
+        loss, mlm_loss, nsp_loss = self.step(batch, mode='train')
 
         return loss, {
             'scalar' : {
                 'loss' : loss,
-                'perplexity': perplexity,
+                'mlm_loss': mlm_loss,
+                'nsp_loss': nsp_loss,
             }
         }
 
@@ -159,11 +199,12 @@ class TrainerBERT(Trainer):
         """
         #loss, accuracy = self.step(batch, mode='val')
 
-        loss, perplexity = self.step(batch, mode='val')
+        loss, mlm_loss, nsp_loss = self.step(batch, mode='val')
 
         return {
             'loss': float(loss),
-            'perplexity': float(perplexity),
+            'mlm_loss': float(mlm_loss),
+            'nsp_loss': float(nsp_loss),
         }
 
     def on_eval_end(self, metrics: List, mode: str):
@@ -181,12 +222,13 @@ class TrainerBERT(Trainer):
 
         metrics_ds = Dataset.from_list(metrics['val_loader'])
         loss = np.mean(metrics_ds['loss'])
-        perplexity = np.mean(metrics_ds['perplexity'])
-        #accuracy = np.mean(metrics_ds['accuracy'])
+        mlm_loss = np.mean(metrics_ds['mlm_loss'])
+        nsp_loss = np.mean(metrics_ds['nsp_loss'])
 
-        return perplexity, {
+        return loss, {
             'scalar' : {
-                'loss' : loss,
-                'perplexity': perplexity,
+                'loss': loss,
+                'mlm_loss': mlm_loss,
+                'nsp_loss': nsp_loss,
             }
         }

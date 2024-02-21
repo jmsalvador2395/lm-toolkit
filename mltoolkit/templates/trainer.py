@@ -145,7 +145,7 @@ class Trainer:
             for key, val in metrics['scalar'].items():
                 writer.add_scalar(
                     f'{key}/{mode}',
-                    val,
+                    float(val),
                     step_number
                 )
         if 'scalars' in metrics:
@@ -393,13 +393,13 @@ class Trainer:
                         # set loss values for train metrics dict
                         trn_metrics['scalar'] = trn_metrics.get('scalar', {})
                         if type(loss) == list:
-                            trn_metrics['scalar'].update({f'loss{i:02}': l for i, l in enumerate(loss)})
+                            trn_metrics['scalar'].update({f'loss{i:02}': float(l) for i, l in enumerate(loss)})
                         else:
-                            trn_metrics['scalar'].update({'loss': loss})
+                            trn_metrics['scalar'].update({'loss': float(loss)})
 
                         # set learning rate values for train metrics dict
                         trn_metrics['scalar'].update({
-                            f'vars/lr-{sk}': self.train_vars[sk].get_last_lr()[-1] 
+                            f'vars/lr-{sk}': float(self.train_vars[sk].get_last_lr()[-1] )
                             for sk in self.sched_keys
                         })
 
