@@ -40,8 +40,8 @@ params:
   shuffle: True
   batch_size: 64
   num_epochs: 2
-  eval_freq: 10000
-  log_freq: 1500
+  eval_freq: 1000
+  log_freq: 250
   num_test_samples: 25
 
   # misc options
