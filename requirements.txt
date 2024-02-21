@@ -23,3 +23,4 @@ torch
 tqdm
 transformers
 torchvision
+peft

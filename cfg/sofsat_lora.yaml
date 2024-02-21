@@ -1,0 +1,60 @@
+paths:
+  logdir_base: "{{project_root}}/tensorboard"
+  cache: "{{project_root}}/data/cache"
+  results: "{{project_root}}/results"
+  
+general: 
+  task: "sofsat/lora"
+  seed: 125
+  note: "a quick note about this training run. this note will show up in tensorboard."
+
+params:
+  save_criterion: "min"
+  save_checkpoint: False 
+
+  # model params
+  lora_r: 4
+  lora_alpha: 32
+  lora_dropout: 0.1
+  seq_len: 512
+  dtype: "bfloat16"
+
+  # optimizer params
+  lr: .0001
+  weight_decay: 0.01
+  clip_max_norm: 1
+
+  # optimizer scheduler
+  sched_step_size: 1
+  sched_gamma: 0.9
+
+  # data params
+  num_proc: 4
+  shuffle: True
+  batch_size: 1
+  num_epochs: 10
+  eval_freq: 1000
+  log_freq: 250
+
+  # misc options
+  skip_first_eval: True
+
+# Used for hyperparameter search.
+# For each parameter, if "num_samples" isn't specified, 
+# only the values specificed in the "values" argument will be used
+search_params:
+  search_type: 'grid'
+  step_limit: null
+  lr: 
+    values: [1.0e-5, 1.0e-3]
+    dtype: "float"
+  weight_decay:
+    values: [1.0e-7, 1.0e-5]
+    dtype: "float"
+  sched_step_size: 
+    values: [2, 5, 10]
+    dtype: "int"
+  sched_gamma:
+    values: [.98, .9]
+    num_samples: 10
+    dtype: "float"

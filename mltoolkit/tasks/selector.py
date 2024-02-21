@@ -6,6 +6,7 @@ from .neuron_skip_mlp import TaskNeuronSkipMLP
 from .transformer_ae import TaskTransformerAE
 from .bert import TaskBERT
 from .vit_cls import TaskVitCls
+from .sofsat import TaskSofsatLora
 from mltoolkit.utils import display
 
 def select_task(cfg, keywords, debug):
@@ -33,6 +34,8 @@ def select_task(cfg, keywords, debug):
         return TaskBERT(cfg, keywords, debug=debug)
     elif task_name == 'vit_cls':
         return TaskVitCls(cfg, keywords, debug=debug)
+    elif task_name == 'sofsat/lora':
+        return TaskSofsatLora(cfg, keywords, debug=debug)
     else:
         display.error(f'invalid task name: {task_name}')
         raise ValueError()
