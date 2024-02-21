@@ -20,7 +20,7 @@ params:
   # model params
   d_model: 768
   n_head: 12
-  n_layers: 6
+  n_layers: 12
   dim_feedforward: 768
   dropout: 0.1
   dtype: "bfloat16"
@@ -38,14 +38,14 @@ params:
   # data params
   num_proc: 20
   shuffle: True
-  batch_size: 16
+  batch_size: 64
   num_epochs: 2
   eval_freq: 10000
   log_freq: 1500
   num_test_samples: 25
 
   # misc options
-  skip_first_eval: False
+  skip_first_eval: True
 
 # Used for hyperparameter search.
 # For each parameter, if "num_samples" isn't specified, 

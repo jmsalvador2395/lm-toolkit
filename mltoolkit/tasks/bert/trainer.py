@@ -22,6 +22,7 @@ from mltoolkit.utils import (
     files,
     strings,
     display,
+    tensor_utils,
 )
 from .model import BERT
 from . import data_module
@@ -44,6 +45,7 @@ class TrainerBERT(Trainer):
         )
 
         model = BERT(**cfg.params, n_vocab=len(self.tokenizer))
+        display.note(f'trainable params: {tensor_utils.count_trainable_params(model):,}')
 
         # optimizer
         optimizer = torch.optim.AdamW(
