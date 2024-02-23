@@ -146,3 +146,18 @@ def get_dtype(dtype_str: str) -> torch.dtype:
         raise ValueError()
 
     return dtype
+
+def freeze_module(mod: nn.Module) -> nn.Module:
+    """
+    freezes the parameters of a  torch.nn.Module
+
+    Input:
+    - mod[nn.Module]: the torch module to freeze
+
+    Output:
+    - nn.Module: the frozen module
+    """
+    for param in mod.parameters():
+        param.requires_grad=False
+
+    return mod

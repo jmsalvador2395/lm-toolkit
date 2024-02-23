@@ -28,6 +28,7 @@ from mltoolkit.utils import (
     tensor_utils,
 )
 from . import data_module
+from .model import get_model
 
 class TrainerSofsatLora(Trainer):
     def __init__(self, config_path, debug=False, accelerator=None):
@@ -42,24 +43,7 @@ class TrainerSofsatLora(Trainer):
 
         train_loader, val_loader = data_module.get_dataloaders(cfg)
 
-        model_name = "mistralai/Mistral-7B-v0.1"
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        base_model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            cache_dir=cfg.paths['cache'],
-        )
-        #self.tokenizer.add_special_tokens({'pad_token': '<pad>'})
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-
-        peft_config = LoraConfig(
-            task_type=TaskType.CAUSAL_LM,
-            inference_mode=False,
-            target_modules=['q_proj', 'k_proj'],
-            r=cfg.params['lora_r'],
-            lora_alpha=cfg.params['lora_alpha'],
-            lora_dropout=cfg.params['lora_dropout'],
-        )
-        model = peft.get_peft_model(base_model, peft_config)
+        self.tokenizer, model = get_model(cfg)
 
         if self.accel.is_main_process:
             display.note(' ',end='')

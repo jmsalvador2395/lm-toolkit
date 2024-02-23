@@ -24,6 +24,7 @@ from mltoolkit.utils import (
     display,
 )
 from .model import TransformerAE
+from .data_module import get_dataloaders
 
 class TrainerTransformerAE(Trainer):
     def __init__(self, config_path, debug=False, accelerator=None):
@@ -36,44 +37,17 @@ class TrainerTransformerAE(Trainer):
     def setup(self):
         cfg = self.cfg
 
+        train_loader, val_loader = get_dataloaders(cfg)
+
         self.tokenizer = AutoTokenizer.from_pretrained(
-            cfg.params['tokenizer']
+            'sentence-transformers/all-mpnet-base-v2'
         )
 
         # define model
-        model = AutoLM(cfg)
-        dtype = cfg.params['dtype']
-        if dtype == 'float32':
-            pass
-        elif dtype == 'float16':
-            model = model.half()
-        elif dtype == 'bfloat16':
-            model = model.to(torch.bfloat16)
-
-        # load mnist dataset
-        ds = datasets.load_dataset(
-            'bookcorpus',
-            cache_dir=cfg.paths['cache'],
-            trust_remote_code=True,
-        )
-        ds = ds['train'].train_test_split(
-            train_size=cfg.params['train_test_split']
-        )
-
-        train_loader = DataLoader(
-            ds['train'],
-            shuffle=cfg.params['shuffle'],
-            batch_size=cfg.params['batch_size'],
-        )
-
-        val_loader = DataLoader(
-            ds['test'],
-            shuffle=cfg.params['shuffle'],
-            batch_size=cfg.params['batch_size'],
-        )
+        model = TransformerAE(n_vocab = len(self.tokenizer), **cfg.params)
 
         # optimizer
-        optimizer = torch.optim.Adam(
+        optimizer = torch.optim.AdamW(
             model.parameters(),
             lr=self.cfg.params['lr'],
             weight_decay=self.cfg.params['weight_decay']
@@ -89,7 +63,7 @@ class TrainerTransformerAE(Trainer):
         self.loss_fn = nn.CrossEntropyLoss()
 
         return {
-            'autolm': model,
+            'ae': model,
             'train_loader': train_loader,
             'val_loader': val_loader,
             'optimizer': optimizer,
@@ -101,37 +75,38 @@ class TrainerTransformerAE(Trainer):
         tokens = self.tokenizer(
             batch['text'],
             truncation=True,
-            max_length=self.cfg.params['seq_len']+1,
+            max_length=self.cfg.params['seq_len'],
             return_token_type_ids=False,
             padding=True,
             return_tensors='pt',
         ).to(self.accel.device)
 
-        input_ids = tokens['input_ids'][:, :-1]
-        pad_ids = tokens['attention_mask'][:, :-1]
+        input_ids = tokens['input_ids'].clone()
+        attention_mask = tokens['attention_mask']
 
-        pad_mask = (pad_ids == 0)
-        _, L = pad_mask.shape
-        attn_mask = torch.ones(
-            (L, L),
-            dtype=torch.bool
-        )
-        attn_mask = attn_mask.triu(diagonal=1)
+        mask_prob = self.cfg.params['mask_prob']
+        token_mask = torch.rand(input_ids.shape ,device=input_ids.device) < mask_prob
+        #num_masked = torch.sum(mask_prob) # might use this later
+        tokens['input_ids'][token_mask] = self.tokenizer.mask_token_id
 
         # compute scores and calculate loss
-        scores = self.train_vars['autolm'](
-            input_ids,
-            attn_mask,
-            pad_mask,
+        scores = self.train_vars['ae'](**tokens)
+        scores = scores['logits']
+
+        # compute loss
+        input_ids = input_ids.to(scores.device)
+        attention_mask = attention_mask.to(scores.device)
+
+        scores = scores[attention_mask == 1]
+        labels = input_ids[attention_mask == 1]
+        loss = self.loss_fn(
+            scores,
+            labels,
         )
-        label_mask = tokens['attention_mask'][:, 1:] == 1
-        labels = tokens['input_ids'][:, 1:][label_mask]
-        scores = scores[label_mask]
 
-        loss = self.loss_fn(scores, labels)
-        perplexity = torch.exp(loss.detach())
+        acc = torch.mean((torch.argmax(scores, dim=-1) == labels).to(torch.float32))
 
-        return loss, perplexity
+        return loss, acc 
 
     def train_step(self, batch: T) -> Tuple[torch.Tensor, Dict]:
         """
@@ -147,12 +122,12 @@ class TrainerTransformerAE(Trainer):
                 refer to {project_root}/mltoolkit/trainers/base.py for the currently supported keyword trackers
         """
 
-        loss, perplexity = self.step(batch, mode='train')
+        loss, acc = self.step(batch, mode='train')
 
         return loss, {
             'scalar' : {
                 'loss' : loss,
-                'perplexity': perplexity,
+                'accuracy': acc,
             }
         }
 
@@ -172,11 +147,11 @@ class TrainerTransformerAE(Trainer):
         """
         #loss, accuracy = self.step(batch, mode='val')
 
-        loss, perplexity = self.step(batch, mode='val')
+        loss, acc = self.step(batch, mode='val')
 
         return {
             'loss': float(loss),
-            'perplexity': float(perplexity),
+            'accuracy': float(acc),
         }
 
     def on_eval_end(self, metrics: List, mode: str):
@@ -194,12 +169,12 @@ class TrainerTransformerAE(Trainer):
 
         metrics_ds = Dataset.from_list(metrics['val_loader'])
         loss = np.mean(metrics_ds['loss'])
-        perplexity = np.mean(metrics_ds['perplexity'])
+        acc = np.mean(metrics_ds['accuracy'])
         #accuracy = np.mean(metrics_ds['accuracy'])
 
-        return perplexity, {
+        return acc, {
             'scalar' : {
                 'loss' : loss,
-                'perplexity': perplexity,
+                'accuracy': acc,
             }
         }

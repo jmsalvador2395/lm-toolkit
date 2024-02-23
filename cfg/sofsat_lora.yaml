@@ -13,8 +13,11 @@ params:
   save_checkpoint: False 
 
   # model params
-  lora_r: 4
-  lora_alpha: 32
+  #base_model: "mistralai/Mistral-7B-v0.1"
+  #base_model: "openai-community/gpt2"
+  base_model: "openai-community/gpt2-xl"
+  lora_r: 8
+  lora_alpha: 8
   lora_dropout: 0.1
   seq_len: 512
   dtype: "bfloat16"
@@ -31,10 +34,10 @@ params:
   # data params
   num_proc: 4
   shuffle: True
-  batch_size: 1
+  batch_size: 8
   num_epochs: 10
-  eval_freq: 1000
-  log_freq: 250
+  eval_freq: 300
+  log_freq: 50
 
   # misc options
   skip_first_eval: True
@@ -43,18 +46,14 @@ params:
 # For each parameter, if "num_samples" isn't specified, 
 # only the values specificed in the "values" argument will be used
 search_params:
-  search_type: 'grid'
-  step_limit: null
+  search_type: 'random'
+  search_steps: 60
+  train_step_limit: 900
   lr: 
-    values: [1.0e-5, 1.0e-3]
+    values: [5.0e-4, 1.0e-3]
+    num_samples: 10
     dtype: "float"
   weight_decay:
     values: [1.0e-7, 1.0e-5]
-    dtype: "float"
-  sched_step_size: 
-    values: [2, 5, 10]
-    dtype: "int"
-  sched_gamma:
-    values: [.98, .9]
     num_samples: 10
     dtype: "float"

@@ -5,7 +5,7 @@ paths:
   
 general: 
   task: "transformer_ae"
-  seed: 125
+  seed: 126
   note: "a quick note about this training run. this note will show up in tensorboard."
 
 params:
@@ -13,14 +13,37 @@ params:
   save_checkpoint: True
 
   # model params
-  in_size: 784
-  hidden_dim: 500
-  dropout: 0.05
-  num_classes: 10
+  mask_prob: .33
+  freeze_encoder: True
+  seq_len: 256
+  dropout: 0.1
+  # pooling operation
+  pool_op: "attention"
+  n_pool_heads: 12
+  d_attention: 768
+  # choose upsampling procedure
+  upsampling_proc: "conv"
+  # "conv" upsampling params
+  deconv_seq: [16, 64, 128, 256]
+  deconv_kernels: [5, 9, 33, 65]
+  deconv_activation: "relu"
+  # "linear" upsampling params
+  uplin_seq_len: 256
+  uplin_activation: "relu"
+  # decoder params
+  decoder_n_layers: 12
+  decoder_d_ffn: 768
+  decoder_activation: 'gelu'
+  decoder_n_heads: 12
+  # classifier params
+  cls_d_ffn: 1024
+  cls_activation: "relu"
+
+  dtype: "float32"
 
   # optimizer params
-  lr: .001
-  weight_decay: 0
+  lr: 5.5e-5
+  weight_decay: 3.5e-5
   beta1: .9
   beta2: .999
   eps: 1.0e-8
@@ -33,10 +56,10 @@ params:
   # data params
   num_proc: 20
   shuffle: True
-  batch_size: 1024
-  num_epochs: 30
-  eval_freq: 50
-  log_freq: 10
+  batch_size: 64
+  num_epochs: 2
+  eval_freq: 100
+  log_freq: 25
 
   # misc options
   skip_first_eval: True
@@ -45,18 +68,21 @@ params:
 # For each parameter, if "num_samples" isn't specified, 
 # only the values specificed in the "values" argument will be used
 search_params:
-  search_type: 'grid'
-  step_limit: null
-  lr: 
-    values: [1.0e-5, 1.0e-3]
+  search_type: 'random'
+  search_steps: 60
+  train_step_limit: 400
+  dropout:
+    values: [.05, .1]
+    dtype: "float"
+  mask_prob: 
+    values: [0.3, 0.6]
+    num_samples: 10
     dtype: "float"
   weight_decay:
-    values: [1.0e-7, 1.0e-5]
+    values: [1.0e-5, 1.0e-4]
+    num_samples: 10
     dtype: "float"
-  sched_step_size: 
-    values: [2, 5, 10]
-    dtype: "int"
-  sched_gamma:
-    values: [.98, .9]
+  lr: 
+    values: [1.0e-5, 7.0e-5]
     num_samples: 10
     dtype: "float"
