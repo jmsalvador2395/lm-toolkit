@@ -5,12 +5,12 @@ paths:
   
 general: 
   task: "sofsat/lora"
-  seed: 125
+  seed: 126
   note: "a quick note about this training run. this note will show up in tensorboard."
 
 params:
   save_criterion: "min"
-  save_checkpoint: False 
+  save_checkpoint: True
 
   # model params
   #base_model: "mistralai/Mistral-7B-v0.1"
@@ -23,8 +23,8 @@ params:
   dtype: "bfloat16"
 
   # optimizer params
-  lr: .0001
-  weight_decay: 0.01
+  lr: .0017765318
+  weight_decay: 5.05198e-5
   clip_max_norm: 1
 
   # optimizer scheduler
@@ -35,7 +35,7 @@ params:
   num_proc: 4
   shuffle: True
   batch_size: 8
-  num_epochs: 10
+  num_epochs: 3
   eval_freq: 300
   log_freq: 50
 
@@ -50,10 +50,10 @@ search_params:
   search_steps: 60
   train_step_limit: 900
   lr: 
-    values: [5.0e-4, 1.0e-3]
+    values: [8.1e-4, 1.0e-2]
     num_samples: 10
     dtype: "float"
   weight_decay:
-    values: [1.0e-7, 1.0e-5]
+    values: [1.0e-6, 1.0e-4]
     num_samples: 10
     dtype: "float"
