@@ -28,14 +28,14 @@ params:
   clip_max_norm: 1
 
   # optimizer scheduler
-  sched_step_size: 1
-  sched_gamma: 0.9
+  sched_step_size: 4
+  sched_gamma: 0.95
 
   # data params
   num_proc: 4
   shuffle: True
   batch_size: 8
-  num_epochs: 3
+  num_epochs: 10
   eval_freq: 300
   log_freq: 50
 
