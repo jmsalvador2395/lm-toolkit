@@ -72,20 +72,24 @@ class TrainerTransformerAE(Trainer):
 
     def step(self, batch: T, mode='train'):
 
-        tokens = self.tokenizer(
-            batch['text'],
-            truncation=True,
-            max_length=self.cfg.params['seq_len'],
-            return_token_type_ids=False,
-            padding=True,
-            return_tensors='pt',
-        ).to(self.accel.device)
+        tokens = self.tokenizer(batch['text'],
+                                truncation=True,
+                                max_length=self.cfg.params['seq_len']+1,
+                                return_token_type_ids=False,
+                                padding=True,
+                                return_tensors='pt').to(self.accel.device)
 
         input_ids = tokens['input_ids'].clone()
-        attention_mask = tokens['attention_mask']
+        attention_mask = tokens['attention_mask'].clone()
+
+        tokens['input_ids'] = input_ids[:, :-1]
+        tokens['attention_mask'] = attention_mask[:, :-1]
+
+        labels = input_ids[:, 1:]
+        label_mask = (input_ids[:, 1:] == 1)
 
         mask_prob = self.cfg.params['mask_prob']
-        token_mask = torch.rand(input_ids.shape ,device=input_ids.device) < mask_prob
+        token_mask = torch.rand(tokens['input_ids'].shape ,device=input_ids.device) < mask_prob
         #num_masked = torch.sum(mask_prob) # might use this later
         tokens['input_ids'][token_mask] = self.tokenizer.mask_token_id
 
@@ -94,19 +98,22 @@ class TrainerTransformerAE(Trainer):
         scores = scores['logits']
 
         # compute loss
-        input_ids = input_ids.to(scores.device)
-        attention_mask = attention_mask.to(scores.device)
+        #input_ids = input_ids.to(scores.device)
+        #attention_mask = attention_mask.to(scores.device)
 
-        scores = scores[attention_mask == 1]
-        labels = input_ids[attention_mask == 1]
+        #scores = scores[attention_mask == 1]
+        #labels = input_ids[attention_mask == 1]
+        scores = scores[label_mask]
+        labels = labels[label_mask]
         loss = self.loss_fn(
             scores,
             labels,
         )
 
+        ppl = torch.exp(loss.detach())
         acc = torch.mean((torch.argmax(scores, dim=-1) == labels).to(torch.float32))
 
-        return loss, acc 
+        return loss, acc, ppl
 
     def train_step(self, batch: T) -> Tuple[torch.Tensor, Dict]:
         """
@@ -122,12 +129,13 @@ class TrainerTransformerAE(Trainer):
                 refer to {project_root}/mltoolkit/trainers/base.py for the currently supported keyword trackers
         """
 
-        loss, acc = self.step(batch, mode='train')
+        loss, acc, ppl = self.step(batch, mode='train')
 
         return loss, {
             'scalar' : {
                 'loss' : loss,
                 'accuracy': acc,
+                'perplexity': ppl,
             }
         }
 
@@ -147,11 +155,12 @@ class TrainerTransformerAE(Trainer):
         """
         #loss, accuracy = self.step(batch, mode='val')
 
-        loss, acc = self.step(batch, mode='val')
+        loss, acc, ppl = self.step(batch, mode='val')
 
         return {
             'loss': float(loss),
             'accuracy': float(acc),
+            'perplexity': float(ppl),
         }
 
     def on_eval_end(self, metrics: List, mode: str):
@@ -170,11 +179,13 @@ class TrainerTransformerAE(Trainer):
         metrics_ds = Dataset.from_list(metrics['val_loader'])
         loss = np.mean(metrics_ds['loss'])
         acc = np.mean(metrics_ds['accuracy'])
+        ppl = np.mean(metrics_ds['perplexity'])
         #accuracy = np.mean(metrics_ds['accuracy'])
 
-        return acc, {
+        return loss, {
             'scalar' : {
                 'loss' : loss,
                 'accuracy': acc,
+                'perplexity': ppl,
             }
         }

@@ -15,7 +15,7 @@ class MeanPooling(nn.Module):
     def __init__(self):
         super(MeanPooling, self).__init__()
 
-    def forward(input_ids, attention_mask):
+    def forward(self, input_ids, attention_mask):
         #First element of model_output contains all token embeddings
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(input_ids.size()).float()
         return (

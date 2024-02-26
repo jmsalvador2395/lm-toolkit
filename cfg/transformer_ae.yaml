@@ -9,20 +9,21 @@ general:
   note: "a quick note about this training run. this note will show up in tensorboard."
 
 params:
-  save_criterion: "max"
+  save_criterion: "min"
   save_checkpoint: True
 
   # model params
-  mask_prob: .33
+  mask_prob: .66
   freeze_encoder: True
   seq_len: 256
   dropout: 0.1
   # pooling operation
   pool_op: "attention"
+  #pool_op: "average"
   n_pool_heads: 12
   d_attention: 768
   # choose upsampling procedure
-  upsampling_proc: "conv"
+  upsampling_proc: "linear"
   # "conv" upsampling params
   deconv_seq: [16, 64, 128, 256]
   deconv_kernels: [5, 9, 33, 65]
@@ -31,7 +32,7 @@ params:
   uplin_seq_len: 256
   uplin_activation: "relu"
   # decoder params
-  decoder_n_layers: 12
+  decoder_n_layers: 3
   decoder_d_ffn: 768
   decoder_activation: 'gelu'
   decoder_n_heads: 12
@@ -60,6 +61,7 @@ params:
   num_epochs: 2
   eval_freq: 100
   log_freq: 25
+  num_test_samples: 25
 
   # misc options
   skip_first_eval: True

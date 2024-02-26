@@ -60,8 +60,14 @@ class TransformerAE(nn.Module):
                 f'invalid upsampling_proc (upsampling procedure) "{upsampling_proc}"'
             )
 
+        # initialize decoder embeddings
+        self.dec_embed = nn.Embedding(
+            n_vocab,
+            d_embed,
+        )
+
         # initaialize decoder (nn.Encoder used because i just want to do self-attention
-        dec_layer = nn.TransformerEncoderLayer(
+        dec_layer = nn.TransformerDecoderLayer(
             d_model=d_embed,
             nhead=kwargs['decoder_n_heads'],
             dim_feedforward=kwargs['decoder_d_ffn'],
@@ -70,7 +76,7 @@ class TransformerAE(nn.Module):
             batch_first=True,
         )
 
-        self.decoder = nn.TransformerEncoder(
+        self.decoder = nn.TransformerDecoder(
             dec_layer,
             kwargs['decoder_n_layers'],
         )
@@ -109,31 +115,25 @@ class TransformerAE(nn.Module):
         )
 
         upsamples = self.upsampler(sent_embeds)
-        if upsamples.shape[-1] < self.S:
-            N, s = upsamples.shape
-            diff = self.S - s
-            upsamples = torch.cat(
-                (upsamples, torch.zeros(N, diff, device=upsamples.device)), 
-                dim=-1
-            )
-        if attention_mask.shape[-1] < self.S:
-            N, s = attention_mask.shape
-            diff = self.S - s
-            attention_mask = torch.cat(
-                (attention_mask, torch.zeros(N, diff, device=attention_mask.device)), 
-                dim=-1
-            )
+
+        embs = self.dec_embed(input_ids)
+        tgt_mask = tensor_utils.get_causal_mask(
+            embs.shape[1],
+            device=upsamples.device,
+        )
 
         last_hidden_state = self.decoder(
-            upsamples, 
-            src_key_padding_mask=(attention_mask == 0).to(upsamples.device),
+            tgt=embs.to(upsamples.device),
+            memory=upsamples, 
+            tgt_mask=tgt_mask,
+            tgt_key_padding_mask=(attention_mask == 0).to(upsamples.device),
         )
-        last_hidden_state = last_hidden_state[:, :L]
+        #last_hidden_state = last_hidden_state#[:, :L]
 
         logits = self.classifier(last_hidden_state)
 
         return {
-            'encodings': sent_embeds,
+            'bottleneck': sent_embeds,
             'last_hidden_state': last_hidden_state,
             'logits': logits,
         }
