@@ -38,7 +38,7 @@ def get_dataloaders(cfg):
     )
 
     val_loader = DataLoader(
-        ds['validation'],
+        ds['validation'].select(range(200)),
         batch_size=cfg.params['batch_size'],
         num_workers=cfg.params['num_proc'],
         shuffle=True,

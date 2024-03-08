@@ -79,14 +79,14 @@ class TrainerTransformerAE(Trainer):
                                 padding=True,
                                 return_tensors='pt').to(self.accel.device)
 
-        input_ids = tokens['input_ids'].clone()
-        attention_mask = tokens['attention_mask'].clone()
+        input_ids = tokens['input_ids'].detach().clone()
+        attention_mask = tokens['attention_mask'].detach().clone()
 
-        tokens['input_ids'] = input_ids[:, :-1]
-        tokens['attention_mask'] = attention_mask[:, :-1]
+        tokens['input_ids'] = tokens['input_ids'][:, :-1]
+        tokens['attention_mask'] = tokens['attention_mask'][:, :-1]
 
         labels = input_ids[:, 1:]
-        label_mask = (input_ids[:, 1:] == 1)
+        label_mask = (attention_mask[:, 1:] == 1)
 
         mask_prob = self.cfg.params['mask_prob']
         token_mask = torch.rand(tokens['input_ids'].shape ,device=input_ids.device) < mask_prob
