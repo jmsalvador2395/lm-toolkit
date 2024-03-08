@@ -59,7 +59,7 @@ class TrainerSofsatLora(Trainer):
         # scheduler
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer,
-            cfg.params['sched_step_size'],
+            step_size=cfg.params['sched_step_size'],
             gamma=cfg.params['sched_gamma'],
         )
 
@@ -105,13 +105,15 @@ class TrainerSofsatLora(Trainer):
                                 return_tensors='pt').to(self.accel.device)
         in_tokens = {key: val[:, :-1] for key, val in tokens.items()}
         labels = tokens['input_ids'][:, 1:]
+        label_mask = (tokens['attention_mask'][:, 1:] == 1)
 
         # model forward
         scores = self.train_vars['sofsat-lora'](**in_tokens)
 
-        N, S, D = scores['logits'].shape
+        #N, S, D = scores['logits'].shape
 
-        loss = self.loss_fn(scores['logits'].reshape((-1, D)), labels.flatten())
+        #loss = self.loss_fn(scores['logits'].reshape((-1, D)), labels.flatten())
+        loss = self.loss_fn(scores['logits'][label_mask], labels[label_mask])
         ppl = torch.exp(loss.detach())
 
         return loss, ppl
