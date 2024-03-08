@@ -6,7 +6,7 @@ import math
 from torch import nn
 from torch.nn import functional as f
 from typing import List
-from transformers import AutoModel
+from transformers import AutoModel, AutoTokenizer
 from sentence_transformers import SentenceTransformer
 
 # local imports
@@ -34,11 +34,10 @@ class TransformerAE(nn.Module):
 
         d_embed = 768
         self.S = kwargs['seq_len']
+        self.enc_name = 'sentence-transformers/all-mpnet-base-v2'
 
         # initialize encoder
-        self.encoder = AutoModel.from_pretrained(
-            'sentence-transformers/all-mpnet-base-v2'
-        )
+        self.encoder = AutoModel.from_pretrained(self.enc_name)
         if freeze_encoder:
             self.encoder = tensor_utils.freeze_module(self.encoder)
 
@@ -137,3 +136,41 @@ class TransformerAE(nn.Module):
             'last_hidden_state': last_hidden_state,
             'logits': logits,
         }
+
+    def encode(self, 
+               sents: List[str],
+               batch_size: int=10):
+
+        if getattr(self, 'tokenizer', None) == None:
+            self.tokenizer = AutoTokenizer.from_pretrained(self.enc_name)
+
+        device = next(self.encoder.parameters()).device
+
+        embeddings = []
+        for idx in range(0, len(sents), batch_size):
+            tokens = self.tokenizer(sents[idx:idx+batch_size],
+                                    truncation=True,
+                                    max_length=self.S,
+                                    return_token_type_ids=False,
+                                    padding=True,
+                                    return_tensors='pt').to(device)
+
+            input_ids = tokens['input_ids']
+            attention_mask = tokens['attention_mask']
+        
+            B, L =  attention_mask.shape
+
+            with torch.no_grad():
+                scores = self.encoder(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask
+                )
+
+                sent_embeds = self.pooler(
+                    scores['last_hidden_state'],
+                    attention_mask,
+                )
+            embeddings.append(sent_embeds)
+
+        embeddings = torch.vstack(embeddings)
+        return embeddings
