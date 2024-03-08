@@ -100,7 +100,6 @@ def set_defaults(cfg, keywords, debug=False):
     cfg.params['batch_size'] = cfg.params.get('batch_size', 32)
     cfg.params['eval_freq'] = cfg.params.get('eval_freq', 1000)
     cfg.params['log_freq'] = cfg.params.get('log_freq', 1000)
-    cfg.params['using_test_loader'] = cfg.params.get('using_test_loader', False)
 
     return cfg
 
