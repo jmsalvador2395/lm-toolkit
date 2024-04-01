@@ -5,6 +5,7 @@ loads config files and substitutes keywords
 import yaml
 from collections import namedtuple
 from random import randint
+from types import FunctionType
 
 # local imports
 from mltoolkit.utils import (
@@ -13,6 +14,37 @@ from mltoolkit.utils import (
     strings,
     display,
 )
+
+import json
+
+class Config:
+    """
+    holds the config values
+    """
+    def __init__(self, cfg_dict: dict={}, load_from: str=None):
+        for key, val in cfg_dict.items():
+            setattr(self, key, val)
+    
+    def __str__(self):
+
+        param_dict = self.asdict()
+
+        out = json.dumps(
+            param_dict,
+            indent=4
+        )
+        return out
+    
+    def asdict(self):
+        params = dir(self)
+        params = filter(lambda x: '__' not in x, params)
+        param_dict = {
+            param: getattr(self, param) for param in params 
+            if not callable(getattr(self, param))
+        }
+        return param_dict
+        
+
 def load(path_str: str, debug=False):
     """
     loads a yaml config file and substitues the keywords with pre-set values
@@ -44,9 +76,11 @@ def load(path_str: str, debug=False):
         keywords
     )
 
+
     # convert to named tuple
     cfg = {**base_cfg, **yaml.safe_load(cfg)}
-    cfg = namedtuple('Config', categories)(**cfg)
+    cfg = Config(cfg)
+    #cfg = namedtuple('Config', categories)(**cfg)
 
     check_required(cfg)
 

@@ -17,6 +17,7 @@ from mltoolkit.utils import (
 )
 
 from mltoolkit.tasks import select_task
+from mltoolkit import tasks
 
 def main():
     """

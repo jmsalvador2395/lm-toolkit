@@ -179,7 +179,7 @@ class Trainer:
                 )
 
     def _log_hparams(self, name, writer, cfg):
-        cfg = cfg._asdict()
+        cfg = cfg.asdict()
 
         # create markdown table
         table = \

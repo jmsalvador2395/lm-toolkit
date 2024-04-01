@@ -7,6 +7,7 @@ from .transformer_ae import TaskTransformerAE
 from .bert import TaskBERT
 from .vit_cls import TaskVitCls
 from .sofsat import TaskSofsatLora
+from .sent_reorder import TaskSentEmbedReordering
 from mltoolkit.utils import display
 
 def select_task(cfg, keywords, debug):
@@ -22,20 +23,20 @@ def select_task(cfg, keywords, debug):
     """
     task_name = cfg.general['task']
 
-    if task_name == 'mnist_mlp':
-        return TaskMNIST(cfg, keywords, debug=debug)
-    elif task_name == 'autolm':
-        return TaskAutoLM(cfg, keywords, debug=debug)
-    elif task_name == 'neuron_skip_mlp':
-        return TaskNeuronSkipMLP(cfg, keywords, debug=debug)
-    elif task_name == 'transformer_ae':
-        return TaskTransformerAE(cfg, keywords, debug=debug)
-    elif task_name == 'bert':
-        return TaskBERT(cfg, keywords, debug=debug)
-    elif task_name == 'vit_cls':
-        return TaskVitCls(cfg, keywords, debug=debug)
-    elif task_name == 'sofsat/lora':
-        return TaskSofsatLora(cfg, keywords, debug=debug)
+    task_dict = {
+		'mnist_mlp': TaskMNIST,
+		'autolm': TaskAutoLM,
+		'neuron_skip_mlp': TaskNeuronSkipMLP,
+		'transformer_ae': TaskTransformerAE,
+		'bert': TaskBERT,
+		'vit_cls': TaskVitCls,
+		'sofsat/lora': TaskSofsatLora,
+        'sent_emb_reorder': TaskSentEmbedReordering,
+    }
+    task = task_dict.get(task_name, None)
+
+    if task is not None:
+        return task(cfg, keywords, debug=debug)
     else:
         display.error(f'invalid task name: {task_name}')
         raise ValueError()
