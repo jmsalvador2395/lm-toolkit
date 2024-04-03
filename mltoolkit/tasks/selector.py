@@ -7,7 +7,10 @@ from .transformer_ae import TaskTransformerAE
 from .bert import TaskBERT
 from .vit_cls import TaskVitCls
 from .sofsat import TaskSofsatLora
-from .sent_reorder import TaskSentEmbedReordering
+from .sent_reorder import (
+    TaskSentEmbedReordering,
+    TaskSentEmbedReordering5,
+)
 from mltoolkit.utils import display
 
 def select_task(cfg, keywords, debug):
@@ -24,14 +27,15 @@ def select_task(cfg, keywords, debug):
     task_name = cfg.general['task']
 
     task_dict = {
-		'mnist_mlp': TaskMNIST,
-		'autolm': TaskAutoLM,
-		'neuron_skip_mlp': TaskNeuronSkipMLP,
-		'transformer_ae': TaskTransformerAE,
-		'bert': TaskBERT,
-		'vit_cls': TaskVitCls,
-		'sofsat/lora': TaskSofsatLora,
+        'mnist_mlp': TaskMNIST,
+        'autolm': TaskAutoLM,
+        'neuron_skip_mlp': TaskNeuronSkipMLP,
+        'transformer_ae': TaskTransformerAE,
+        'bert': TaskBERT,
+        'vit_cls': TaskVitCls,
+        'sofsat/lora': TaskSofsatLora,
         'sent_emb_reorder': TaskSentEmbedReordering,
+        'sent_emb_reorder_5': TaskSentEmbedReordering5,
     }
     task = task_dict.get(task_name, None)
 

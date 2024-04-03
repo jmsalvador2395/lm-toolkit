@@ -24,3 +24,4 @@ tqdm
 transformers
 torchvision
 peft
+torch-tb-profiler

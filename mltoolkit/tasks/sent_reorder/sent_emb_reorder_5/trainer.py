@@ -22,7 +22,7 @@ from mltoolkit.utils import (
 from .model import SentEmbedReorder
 from .data_module import get_dataloaders
 
-class TrainerSentEmbedReordering(Trainer):
+class TrainerSentEmbedReordering5(Trainer):
     def __init__(self, config_path, debug=False, accelerator=None):
         super().__init__(
             config_path,

@@ -4,7 +4,7 @@ paths:
   results: "{{project_root}}/results"
   
 general: 
-  task: "sent_emb_reorder"
+  task: "sent_emb_reorder_5"
   seed: 127
   note: "a quick note about this training run. this note will show up in tensorboard."
 

@@ -1,1 +1,2 @@
+from .sent_emb_reorder_5 import TaskSentEmbedReordering5
 from .sent_emb_reorder import TaskSentEmbedReordering

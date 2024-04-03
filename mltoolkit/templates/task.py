@@ -228,7 +228,7 @@ class Task:
                     files.create_path(out_dir)
                     with open(out_dir + '/best_config.yaml', 'w') as f:
                         candidate_config.general.pop('experiment_name')
-                        f.write(yaml.dump(candidate_config._asdict()))
+                        f.write(yaml.dump(candidate_config.asdict()))
                     with open(out_dir + '/info.txt', 'w') as f:
                         f.write(
                             f'best model score: {best_score}\n'
