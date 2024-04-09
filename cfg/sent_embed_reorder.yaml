@@ -43,7 +43,8 @@ params:
   num_epochs: 10
   eval_freq: 300
   log_freq: 100
-  num_test_samples: 25
+  #num_test_samples: 25
+  n_sents: 128
 
   # misc options
   skip_first_eval: True

@@ -7,6 +7,9 @@ from torch import nn
 import numpy as np
 from datasets import Dataset
 from scipy.stats import kendalltau, spearmanr
+from nltk import sent_tokenize
+from itertools import chain
+from numpy.lib.stride_tricks import sliding_window_view
 
 # for typing
 from typing import Tuple, List, Dict, TypeVar
@@ -18,9 +21,11 @@ from mltoolkit.utils import (
     files,
     strings,
     display,
+    tensor_utils,
 )
 from .model import SentEmbedReorder
 from .data_module import get_dataloaders
+from mltoolkit.models.sent_encoders.hf_models import from_hf
 
 class TrainerSentEmbedReordering(Trainer):
     def __init__(self, config_path, debug=False, accelerator=None):
@@ -33,7 +38,7 @@ class TrainerSentEmbedReordering(Trainer):
     def setup(self):
         cfg = self.cfg
 
-        train_loader, val_loader = get_dataloaders(cfg)
+        train_vars = get_dataloaders(cfg)
 
         # define model
         model = SentEmbedReorder(**cfg.params)
@@ -52,24 +57,83 @@ class TrainerSentEmbedReordering(Trainer):
             gamma=cfg.params['sched_gamma'],
         )
 
-        self.loss_fn = nn.HuberLoss()
+        # sentence encoder
+        model_name = 'mixedbread-ai/mxbai-embed-large-v1'
+        encoder = from_hf(
+            model_name, 
+            emb_dim=1024, 
+            max_seq_len=512,
+            cache_dir=cfg.paths['cache'],
+        )
 
-        return {
+        self.loss_fn = nn.HuberLoss()
+        train_vars.update({
             'reorder': model,
-            'train_loader': train_loader,
-            'val_loader': val_loader,
             'optimizer': optimizer,
-            'scheduler': scheduler
-        }
+            'scheduler': scheduler,
+            'encoder': encoder,
+        })
+
+        return train_vars
 
     def step(self, batch: T, mode='train'):
 
-        embeddings = batch['embeddings']
-        N, L, D = embeddings.shape
+        # prepare batch of sentences
+        text = batch['text']
+        sent_batch = [sent_tokenize(sent) for sent in text]
+        lengths = np.array([len(sents) for sents in sent_batch])
+        L = min(self.cfg.params['n_sents'], max(lengths))
+        trunc_lengths = np.minimum(
+            lengths,
+            self.cfg.params['n_sents'],
+        )
+        diffs = np.maximum(0, L - lengths)
 
-        X = np.arange(N)[None].T.repeat(L, axis=-1)
-        Y = np.array([np.random.permutation(L) for _ in range(N)])
-        shuffled_embs = embeddings[X, Y]
+        #sent_batch = [sents[:L] for sents in sent_batch]
+        sent_batch = list(map(lambda x: x[:L], sent_batch))
+        sent_batch = list(chain.from_iterable(sent_batch))
+
+        sent_embs = self.train_vars['encoder'].encode(
+            sent_batch,
+            convert_to_tensor=True,
+            device=self.accel.device
+        )
+        indices = sliding_window_view(
+            np.cumsum(np.hstack(([0], trunc_lengths))), 
+            2
+        )
+        sent_embs = [
+            sent_embs[start:stop]
+            for start, stop in indices
+        ]
+
+        input_embs = tensor_utils.pad_and_stack(
+            sent_embs,
+            stack_dim=0,
+            pad_dim=0,
+        )
+        N, L, E = input_embs.shape
+
+        # create mask
+        mask = torch.zeros(
+            (N, L), 
+            dtype=torch.long, 
+            device=self.accel.device,
+        )
+        mask_trgts = diffs > 0
+        mask[mask_trgts, lengths[mask_trgts]] = True
+        mask = mask.cumsum(axis=-1).to(torch.bool)
+
+        #X = np.arange(N)[None].T.repeat(L, axis=-1)
+        #shuffled_embs = embeddings[X, Y]
+        X = torch.arange(N)[..., None].repeat((1, L))
+        Y = torch.arange(L).repeat(N, 1)
+        for row, tl in zip(Y, trunc_lengths):
+            row[:tl] = torch.tensor(np.random.permutation(tl))
+        
+        X, Y = X.to(self.accel.device), Y.to(self.accel.device)
+
+        shuffled_embs = sent_embs[X, Y]
 
         scores = self.train_vars['reorder'](shuffled_embs)
         labels = 1 + torch.tensor(
