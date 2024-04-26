@@ -45,8 +45,9 @@ class TrainerBertPretrain(Trainer):
         )
 
         model = BERT(**cfg.params, n_vocab=len(self.tokenizer))
-        print(model)
-        display.note(f'trainable params: {tensor_utils.count_trainable_params(model):,}')
+        if self.accel.is_main_process:
+            print(model)
+            display.note(f'trainable params: {tensor_utils.count_trainable_params(model):,}')
 
         # optimizer
         optimizer = torch.optim.AdamW(
