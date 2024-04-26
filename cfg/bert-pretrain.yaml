@@ -38,7 +38,7 @@ params:
   # data params
   num_proc: 8
   shuffle: True
-  batch_size: 16
+  batch_size: 4
   num_epochs: 2
   eval_freq: 1000
   log_freq: 250

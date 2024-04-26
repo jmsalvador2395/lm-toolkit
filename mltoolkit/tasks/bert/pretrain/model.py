@@ -64,8 +64,8 @@ class BERT(nn.Module):
             layer,
             n_layers,
         )
-        self.mlm_cls = nn.Linear(dim_feedforward, n_vocab)
-        self.nsp_cls = nn.Linear(dim_feedforward, 2)
+        self.mlm_cls = nn.Linear(d_model, n_vocab)
+        self.nsp_cls = nn.Linear(d_model, 2)
 
     def forward(self, input_ids, attention_mask, segment_ids=None):
         """
