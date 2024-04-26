@@ -27,7 +27,7 @@ from mltoolkit.utils import (
 from .model import BERT
 from . import data_module
 
-class TrainerBERT(Trainer):
+class TrainerBertPretrain(Trainer):
     def __init__(self, config_path, debug=False, accelerator=None):
         super().__init__(
             config_path,
@@ -45,6 +45,7 @@ class TrainerBERT(Trainer):
         )
 
         model = BERT(**cfg.params, n_vocab=len(self.tokenizer))
+        print(model)
         display.note(f'trainable params: {tensor_utils.count_trainable_params(model):,}')
 
         # optimizer

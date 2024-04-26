@@ -18,10 +18,10 @@ params:
   mask_replace_keep_dist: [.8, .1, .1]
 
   # model params
-  d_model: 768
-  n_head: 12
-  n_layers: 12
-  dim_feedforward: 768
+  d_model: 1024
+  n_head: 16
+  n_layers: 24
+  dim_feedforward: 4096
   dropout: 0.1
   dtype: "bfloat16"
   seq_len: 512
@@ -36,9 +36,9 @@ params:
   sched_gamma: 0.9
 
   # data params
-  num_proc: 20
+  num_proc: 8
   shuffle: True
-  batch_size: 64
+  batch_size: 16
   num_epochs: 2
   eval_freq: 1000
   log_freq: 250

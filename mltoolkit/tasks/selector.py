@@ -31,7 +31,7 @@ def select_task(cfg, keywords, debug):
         'autolm': TaskAutoLM,
         'neuron_skip_mlp': TaskNeuronSkipMLP,
         'transformer_ae': TaskTransformerAE,
-        'bert': TaskBertPretrain,
+        'bert-pretrain': TaskBertPretrain,
         'vit_cls': TaskVitCls,
         'sofsat/lora': TaskSofsatLora,
         'sent_emb_reorder': TaskSentEmbedReordering,
