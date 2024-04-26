@@ -4,7 +4,7 @@ from .mnist_mlp import TaskMNIST
 from .autolm import TaskAutoLM
 from .neuron_skip_mlp import TaskNeuronSkipMLP
 from .transformer_ae import TaskTransformerAE
-from .bert import TaskBERT
+from .bert import TaskBertPretrain
 from .vit_cls import TaskVitCls
 from .sofsat import TaskSofsatLora
 from .sent_reorder import (
@@ -31,14 +31,15 @@ def select_task(cfg, keywords, debug):
         'autolm': TaskAutoLM,
         'neuron_skip_mlp': TaskNeuronSkipMLP,
         'transformer_ae': TaskTransformerAE,
-        'bert': TaskBERT,
+        'bert': TaskBertPretrain,
         'vit_cls': TaskVitCls,
         'sofsat/lora': TaskSofsatLora,
         'sent_emb_reorder': TaskSentEmbedReordering,
         'sent_emb_reorder_5': TaskSentEmbedReordering5,
     }
-    task = task_dict.get(task_name, None)
 
+    # Retrieve and execute task
+    task = task_dict.get(task_name, None)
     if task is not None:
         return task(cfg, keywords, debug=debug)
     else:

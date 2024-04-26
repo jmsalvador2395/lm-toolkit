@@ -5,7 +5,7 @@ paths:
   
 general: 
   task: "sent_emb_reorder_5"
-  seed: 127
+  seed: 128
   note: "a quick note about this training run. this note will show up in tensorboard."
 
 params:
@@ -16,7 +16,7 @@ params:
   d_model: 1024
   nhead: 16
   dim_feedforward: 2048
-  dropout: 0.00
+  dropout: 0.0010464151
   activation: 'gelu'
   n_layers: 1
   seq_len: 5
@@ -25,8 +25,8 @@ params:
   dtype: "float32"
 
   # optimizer params
-  lr: 6.06221e-5
-  weight_decay: .0061027885
+  lr: 0.000136149
+  weight_decay: 1.0e1
   beta1: .9
   beta2: .999
   eps: 1.0e-8
@@ -39,8 +39,8 @@ params:
   # data params
   num_proc: 20
   shuffle: True
-  batch_size: 32
-  num_epochs: 10
+  batch_size: 64
+  num_epochs: 30
   eval_freq: 300
   log_freq: 100
   num_test_samples: 25
@@ -56,10 +56,19 @@ search_params:
   search_steps: 60
   train_step_limit: null
   weight_decay:
-    values: [1.0e-5, 1.0e-2]
+    values: [1.0e-6, 1.0e-1]
     num_samples: 10
     dtype: "float"
   lr: 
-    values: [1.0e-6, 1.0e-3]
+    values: [1.0e-7, 1.0e-3]
     num_samples: 10
     dtype: "float"
+  dropout:
+    values: [0.0, 0.1]
+    num_samples: 10
+    dtype: "float"
+  batch_size:
+    values: [4, 8, 16, 32, 64, 128, 256, 512]
+    #num_samples: null
+    dtype: "int"
+

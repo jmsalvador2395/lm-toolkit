@@ -1,2 +1,2 @@
-from .task import TaskBERT
+from .pretrain.task import TaskBertPretrain
 

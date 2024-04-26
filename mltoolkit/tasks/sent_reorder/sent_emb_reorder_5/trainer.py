@@ -72,7 +72,7 @@ class TrainerSentEmbedReordering5(Trainer):
         shuffled_embs = embeddings[X, Y]
 
         scores = self.train_vars['reorder'](shuffled_embs)
-        labels = 1 + torch.tensor(
+        labels = torch.tensor(
             Y, 
             dtype=torch.float32, 
             device=scores.device,
@@ -83,12 +83,34 @@ class TrainerSentEmbedReordering5(Trainer):
             labels,
         )
 
+        """
         preds = torch.argsort(scores)
         tau, p_tau = kendalltau(Y, preds.cpu().numpy())
         rho, p_rho = spearmanr(
             Y.flatten(), 
             preds.cpu().numpy().flatten()
         )
+        """
+        scores = scores.detach().cpu().numpy()
+        kendall = [
+            tuple(kendalltau(y, score))
+            for y, score in zip(Y, scores)
+            #tuple(kendalltau(y[msk], pred))
+            #for y, msk, pred in zip(Y, mask, preds)
+        ]
+        tau, p_tau = zip(*kendall)
+        tau = np.mean(tau)
+        p_tau = np.mean(p_tau)
+
+        spearman = [
+            tuple(spearmanr(y, score))
+            for y, score in zip(Y, scores)
+            #tuple(spearmanr(y[msk], pred))
+            #for y, msk, pred in zip(Y, mask, preds)
+        ]
+        rho, p_rho = zip(*spearman)
+        rho = np.mean(rho)
+        p_rho = np.mean(p_rho)
 
         return loss, tau, rho, p_tau, p_rho
 

@@ -26,7 +26,7 @@ class SentEmbedReorder(nn.Module):
             num_xformer_layers=3,
             mlp_hidden_dim=2048,
             num_mlp_layers=2,
-            with_positions=True,
+            n_positions=None,
             **kwargs):
 
         super(SentEmbedReorder, self).__init__()
@@ -44,9 +44,11 @@ class SentEmbedReorder(nn.Module):
             num_layers=num_xformer_layers,
         )
 
-        self.with_positions = with_positions
-        if with_positions:
-            self.positions = nn.Parameter(torch.randn(5, d_model))
+        self.n_positions = n_positions
+        if n_positions:
+            self.positions = nn.Parameter(
+                torch.randn(n_positions, d_model)
+            )
 
         module_list = [nn.Linear(d_model, mlp_hidden_dim), nn.ReLU()]
         module_list += (num_mlp_layers-1)*[
@@ -58,10 +60,13 @@ class SentEmbedReorder(nn.Module):
         self.mlp = nn.Sequential(*module_list)
 
 
-    def forward(self, X):
-        if self.with_positions:
-            X += self.positions[None]
-        scores = self.encoder(X)
+    def forward(self, X, pad_mask):
+
+        N, L, E = X.shape
+
+        if self.n_positions:
+            X += self.positions[:L][None]
+        scores = self.encoder(X, src_key_padding_mask=pad_mask)
         scores = self.mlp(scores)
         scores = scores.squeeze(-1)
         return scores

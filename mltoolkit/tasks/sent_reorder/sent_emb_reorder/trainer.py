@@ -10,6 +10,7 @@ from scipy.stats import kendalltau, spearmanr
 from nltk import sent_tokenize
 from itertools import chain
 from numpy.lib.stride_tricks import sliding_window_view
+from torch.nn import functional as F
 
 # for typing
 from typing import Tuple, List, Dict, TypeVar
@@ -79,53 +80,27 @@ class TrainerSentEmbedReordering(Trainer):
     def step(self, batch: T, mode='train'):
 
         # prepare batch of sentences
-        text = batch['text']
-        sent_batch = [sent_tokenize(sent) for sent in text]
-        lengths = np.array([len(sents) for sents in sent_batch])
-        L = min(self.cfg.params['n_sents'], max(lengths))
+        lengths = np.array([len(T) for T in batch])
+
+        L = min(self.cfg.params['max_length'], max(lengths))
         trunc_lengths = np.minimum(
             lengths,
-            self.cfg.params['n_sents'],
+            self.cfg.params['max_length'],
         )
         diffs = np.maximum(0, L - lengths)
 
-        #sent_batch = [sents[:L] for sents in sent_batch]
-        sent_batch = list(map(lambda x: x[:L], sent_batch))
-        sent_batch = list(chain.from_iterable(sent_batch))
-
-        sent_embs = self.train_vars['encoder'].encode(
-            sent_batch,
-            convert_to_tensor=True,
-            device=self.accel.device
-        )
-        indices = sliding_window_view(
-            np.cumsum(np.hstack(([0], trunc_lengths))), 
-            2
-        )
-        sent_embs = [
-            sent_embs[start:stop]
-            for start, stop in indices
-        ]
-
         input_embs = tensor_utils.pad_and_stack(
-            sent_embs,
+            batch,
             stack_dim=0,
             pad_dim=0,
         )
         N, L, E = input_embs.shape
-
-        # create mask
-        mask = torch.zeros(
-            (N, L), 
-            dtype=torch.long, 
+        mask = tensor_utils.get_pad_mask(
+            (N, L),
+            lengths,
             device=self.accel.device,
         )
-        mask_trgts = diffs > 0
-        mask[mask_trgts, lengths[mask_trgts]] = True
-        mask = mask.cumsum(axis=-1).to(torch.bool)
 
-        #X = np.arange(N)[None].T.repeat(L, axis=-1)
-        #shuffled_embs = embeddings[X, Y]
         X = torch.arange(N)[..., None].repeat((1, L))
         Y = torch.arange(L).repeat(N, 1)
         for row, tl in zip(Y, trunc_lengths):
@@ -133,26 +108,43 @@ class TrainerSentEmbedReordering(Trainer):
         
         X, Y = X.to(self.accel.device), Y.to(self.accel.device)
 
-        shuffled_embs = sent_embs[X, Y]
+        shuffled_embs = input_embs[X, Y]
 
-        scores = self.train_vars['reorder'](shuffled_embs)
-        labels = 1 + torch.tensor(
-            Y, 
-            dtype=torch.float32, 
-            device=scores.device,
-        ) 
+        # compute scores
+        scores = self.train_vars['reorder'](
+            shuffled_embs,
+            mask
+        )
 
+        # compute loss
+        mask = ~mask
+        labels = Y.to(torch.float32)
         loss = self.loss_fn(
-            scores,
-            labels,
+            scores[mask],
+            labels[mask],
         )
 
-        preds = torch.argsort(scores)
-        tau, p_tau = kendalltau(Y, preds.cpu().numpy())
-        rho, p_rho = spearmanr(
-            Y.flatten(), 
-            preds.cpu().numpy().flatten()
-        )
+        # compute correlation scores
+        scores = scores.detach().cpu().numpy()
+        mask = mask.cpu().numpy()
+        preds = [scrs[msk] for scrs, msk in zip(scores, mask)]
+
+        Y = Y.cpu().numpy()
+        kendall = [
+            tuple(kendalltau(y[msk], pred))
+            for y, msk, pred in zip(Y, mask, preds)
+        ]
+        tau, p_tau = zip(*kendall)
+        tau = np.mean(tau)
+        p_tau = np.mean(p_tau)
+
+        spearman = [
+            tuple(spearmanr(y[msk], pred))
+            for y, msk, pred in zip(Y, mask, preds)
+        ]
+        rho, p_rho = zip(*spearman)
+        rho = np.mean(rho)
+        p_rho = np.mean(p_rho)
 
         return loss, tau, rho, p_tau, p_rho
 
@@ -216,7 +208,7 @@ class TrainerSentEmbedReordering(Trainer):
             'p_rho': float(p_rho),
         }
 
-    def on_eval_end(self, metrics: List, mode: str):
+    def on_eval_end(self, metrics: Dict[str, list], mode: str):
         """
         use this to aggregate your metrics collected from the outputs of 
         eval_step()
@@ -232,19 +224,16 @@ class TrainerSentEmbedReordering(Trainer):
             log_values[Dict[Dict[str, T]]]: 
         """
 
-        metrics_ds = Dataset.from_list(metrics['val_loader'])
-        loss = np.mean(metrics_ds['loss'])
-        tau = np.mean(metrics_ds['tau'])
-        rho = np.mean(metrics_ds['rho'])
-        p_tau = np.mean(metrics_ds['p_tau'])
-        p_rho = np.mean(metrics_ds['p_rho'])
+        eval_results = {'scalar': {}}
+        #metrics_ds = Dataset.from_list(metrics['val_loader'])
+        for name, metric_ds in metrics.items():
+            metric_ds = Dataset.from_list(metric_ds)
+            eval_results['scalar'].update({
+                f'loss/{name}': np.mean(metric_ds['loss']),
+                f'tau/{name}': np.mean(metric_ds['tau']),
+                f'rho/{name}': np.mean(metric_ds['rho']),
+                f'p_tau/{name}': np.mean(metric_ds['p_tau']),
+                f'p_rho/{name}': np.mean(metric_ds['p_rho']),
+            })
 
-        return rho, {
-            'scalar' : {
-                'loss' : loss,
-                'tau': tau,
-                'rho': rho,
-                'p_tau': p_tau,
-                'p_rho': p_rho,
-            }
-        }
+        return eval_results['scalar']['loss/val_loader'], eval_results

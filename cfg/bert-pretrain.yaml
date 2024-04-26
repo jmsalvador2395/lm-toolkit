@@ -4,7 +4,7 @@ paths:
   results: "{{project_root}}/results"
   
 general: 
-  task: "bert"
+  task: "bert-pretrain"
   seed: 125
   note: "a quick note about this training run. this note will show up in tensorboard."
 

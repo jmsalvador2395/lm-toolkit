@@ -3,7 +3,9 @@ from torch import nn
 import random
 import numpy as np
 
+
 from torch import Tensor
+from numpy import ndarray
 from typing import (
     List, Dict, Tuple, 
     Optional, Iterable, Callable,
@@ -59,6 +61,38 @@ def get_causal_mask(S: int, device='cpu') -> torch.Tensor:
     )
 
     return attn_mask
+
+def get_pad_mask(
+        shape: Tuple[int],
+        start_indices: List[int] | ndarray | Tensor,
+        device: str='cpu') -> torch.Tensor:
+    """
+    returns a 2d padding tensor of shape `shape`
+
+    Input:
+    - shape: the shape of the padding tensor
+    - start_indices[List[int], ndarray, Tensor]: the list-like obbject
+      that contains the indices that correspond to where the padding
+      should start
+    - device[int]: the device to store the array
+
+    Output:
+    - torch.Tensor: padding tensor of shape 
+      (len(start_indices), max(start_indices))
+    """
+
+    pad_mask = torch.zeros(
+        shape,
+        dtype=torch.bool,
+        device=device,
+    )
+
+    targets = (start_indices >= 0) & (start_indices < shape[-1])
+    pad_mask[targets, start_indices[targets]] = True
+
+    pad_mask = pad_mask.cumsum(axis=-1).to(torch.bool)
+
+    return pad_mask
 
 def count_params(model: nn.Module) -> int:
     """

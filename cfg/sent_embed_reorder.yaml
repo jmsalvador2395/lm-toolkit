@@ -5,46 +5,50 @@ paths:
   
 general: 
   task: "sent_emb_reorder"
-  seed: 127
+  seed: 129
   note: "a quick note about this training run. this note will show up in tensorboard."
 
 params:
-  save_criterion: "max"
+  save_criterion: "min"
   save_checkpoint: True
 
   # model params
   d_model: 1024
   nhead: 16
   dim_feedforward: 2048
-  dropout: 0.00
+  #dropout: 0.01
+  dropout: 0.0010464151
   activation: 'gelu'
   n_layers: 1
-  seq_len: 5
-  with_positions: True
+  n_positions: 64
+  max_length: 64
+  enc_batchsize: 64
 
   dtype: "float32"
 
   # optimizer params
-  lr: 6.06221e-5
-  weight_decay: .0061027885
+  #lr: .0001519354
+  #weight_decay: 0.0001519353699381043
+  lr: 0.000136149
+  weight_decay: 1.0e-1
   beta1: .9
   beta2: .999
   eps: 1.0e-8
   clip_max_norm: 1
 
   # optimizer scheduler
-  sched_step_size: 5
-  sched_gamma: 0.9
+  sched_step_size: 10
+  sched_gamma: 0.99
 
   # data params
   num_proc: 20
   shuffle: True
-  batch_size: 32
-  num_epochs: 10
-  eval_freq: 300
+  #batch_size: 128
+  batch_size: 256
+  num_epochs: 40
+  eval_freq: 600
   log_freq: 100
   #num_test_samples: 25
-  n_sents: 128
 
   # misc options
   skip_first_eval: True
@@ -55,12 +59,16 @@ params:
 search_params:
   search_type: 'random'
   search_steps: 60
-  train_step_limit: null
+  train_step_limit: 2400
   weight_decay:
-    values: [1.0e-5, 1.0e-2]
+    values: [1.0e-6, 1.0e-2]
     num_samples: 10
     dtype: "float"
   lr: 
     values: [1.0e-6, 1.0e-3]
     num_samples: 10
     dtype: "float"
+  batch_size: 
+    values: [32, 64, 128]
+    num_samples: 10
+    dtype: "int"
