@@ -120,7 +120,7 @@ class TrainerBertPretrain(Trainer):
         segment_ids = torch.cumsum(segment_ids, dim=-1)
 
 
-        # TODO mask tokens
+        # set masking targets
         mlm_labels = tokens['input_ids'].clone()
         mlm_targets = np.random.rand(*tokens['input_ids'].shape) < self.cfg.params['mlm_prob']
         mlm_targets *= tokens['attention_mask'].to(torch.bool).cpu().numpy()
@@ -145,6 +145,9 @@ class TrainerBertPretrain(Trainer):
             device=tokens['input_ids'].device,
         )
 
+#        if self.accel.is_main_process():
+#            breakpoint()
+#        self.accel.wait_for_everyon()
         mlm_scores, nsp_scores = self.train_vars['bert'](**tokens, segment_ids=segment_ids)
 
         # compute_loss

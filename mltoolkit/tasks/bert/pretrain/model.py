@@ -7,6 +7,7 @@ from torch.nn import functional as f
 from typing import List
 from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import SentenceTransformer
+from torch.distributed import get_rank
 
 # local imports
 from mltoolkit.nn_modules import PositionalEncoding
@@ -83,6 +84,7 @@ class BERT(nn.Module):
         scores += self.position_emb[None, :S]
 
         # pass through transformer
+        #print(f'rank {get_rank()}: scores - {scores.shape}, mask - {pad_mask.shape}')
         scores = self.transformer(
             scores, 
             src_key_padding_mask=pad_mask,

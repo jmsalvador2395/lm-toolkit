@@ -10,7 +10,6 @@ jupyterthemes
 matplotlib
 nltk
 numpy
-openai
 pandas
 rouge-score
 scikit-learn
