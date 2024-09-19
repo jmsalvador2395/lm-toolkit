@@ -26,7 +26,7 @@ params:
 
   # optimizer params
   lr: 0.000136149
-  weight_decay: 1.0e1
+  weight_decay: 0.0907614082
   beta1: .9
   beta2: .999
   eps: 1.0e-8
@@ -39,7 +39,7 @@ params:
   # data params
   num_proc: 20
   shuffle: True
-  batch_size: 64
+  batch_size: 59
   num_epochs: 30
   eval_freq: 300
   log_freq: 100

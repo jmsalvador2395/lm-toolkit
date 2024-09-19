@@ -3,14 +3,14 @@ this is an example trainer class that inherits TrainerBase
 """
 # external imports
 import torch
-from torch import nn
 import numpy as np
+import itertools
+from torch import nn
 from datasets import Dataset
 from scipy.stats import kendalltau, spearmanr
+from transformers import AutoTokenizer, AutoModel
+from sentence_transformers import SentenceTransformer
 from nltk import sent_tokenize
-from itertools import chain
-from numpy.lib.stride_tricks import sliding_window_view
-from torch.nn import functional as F
 
 # for typing
 from typing import Tuple, List, Dict, TypeVar
@@ -18,15 +18,15 @@ T = TypeVar('T')
 
 # local imports
 from mltoolkit.templates import Trainer
+from mltoolkit.utils import tensor_utils
+from mltoolkit.models.sent_encoders.hf_models import from_hf
 from mltoolkit.utils import (
     files,
     strings,
     display,
-    tensor_utils,
 )
 from .model import SentEmbedReorder
 from .data_module import get_dataloaders
-from mltoolkit.models.sent_encoders.hf_models import from_hf
 
 class TrainerSentEmbedReordering(Trainer):
     def __init__(self, config_path, debug=False, accelerator=None):
@@ -39,10 +39,26 @@ class TrainerSentEmbedReordering(Trainer):
     def setup(self):
         cfg = self.cfg
 
-        train_vars = get_dataloaders(cfg)
+        train_loader, val_loader = get_dataloaders(cfg)
 
-        # define model
+        # define models
+        model_name = "mixedbread-ai/mxbai-embed-large-v1"
+        """
+        encoder = from_hf(
+            model_name, 
+            emb_dim=1024, 
+            max_seq_len=512,
+            cache_dir=cfg.paths['cache'],
+        )
+        """
+        encoder = AutoModel.from_pretrained(
+            model_name,
+            cache_dir=cfg.paths['cache'],
+        )
+        encoder.train()
         model = SentEmbedReorder(**cfg.params)
+
+        tok = AutoTokenizer.from_pretrained(model_name)
 
         # optimizer
         optimizer = torch.optim.AdamW(
@@ -58,89 +74,106 @@ class TrainerSentEmbedReordering(Trainer):
             gamma=cfg.params['sched_gamma'],
         )
 
-        # sentence encoder
-        model_name = 'mixedbread-ai/mxbai-embed-large-v1'
-        encoder = from_hf(
-            model_name, 
-            emb_dim=1024, 
-            max_seq_len=512,
-            cache_dir=cfg.paths['cache'],
-        )
-
         self.loss_fn = nn.HuberLoss()
-        train_vars.update({
-            'reorder': model,
-            'optimizer': optimizer,
-            'scheduler': scheduler,
-            'encoder': encoder,
-        })
 
-        return train_vars
+        return {
+            'reorder': model,
+            'encoder': encoder,
+            'tok': tok,
+            'train_loader': train_loader,
+            'val_loader': val_loader,
+            'optimizer': optimizer,
+            'scheduler': scheduler
+        }
 
     def step(self, batch: T, mode='train'):
 
-        # prepare batch of sentences
-        lengths = np.array([len(T) for T in batch])
+        tok = self.train_vars['tok']
 
-        L = min(self.cfg.params['max_length'], max(lengths))
-        trunc_lengths = np.minimum(
-            lengths,
-            self.cfg.params['max_length'],
-        )
-        diffs = np.maximum(0, L - lengths)
+        # convert docs to batch of sentences
+        sent_batch = [sent_tokenize(el) for el in batch['text']]
+        N = len(sent_batch)
 
-        input_embs = tensor_utils.pad_and_stack(
-            batch,
-            stack_dim=0,
-            pad_dim=0,
-        )
-        N, L, E = input_embs.shape
-        mask = tensor_utils.get_pad_mask(
-            (N, L),
-            lengths,
-            device=self.accel.device,
-        )
+        # get number of sentences per doc
+        sent_lengths = [len(doc) for doc in sent_batch]
 
-        X = torch.arange(N)[..., None].repeat((1, L))
-        Y = torch.arange(L).repeat(N, 1)
-        for row, tl in zip(Y, trunc_lengths):
-            row[:tl] = torch.tensor(np.random.permutation(tl))
+        # convert (flatten) List[List[str]] to List[str]
+        sent_batch_flt = list(itertools.chain.from_iterable(sent_batch))
+
+        # tokenize
+        tokens = tok(
+                sent_batch_flt,
+                truncation=True,
+                max_length=self.cfg.params['sent_len'],
+                return_token_type_ids=False,
+                padding=True,
+                return_tensors='pt').to(self.accel.device)
+
+        # get sentence embeddings
+        sent_embeds = \
+            self.train_vars['encoder'](**tokens)['pooler_output']
         
-        X, Y = X.to(self.accel.device), Y.to(self.accel.device)
+        # group sentence embeddings by document
+        embeds_per_doc = torch.split(sent_embeds, sent_lengths)
+        embeds_per_doc = tensor_utils.pad_and_stack(embeds_per_doc)
 
-        shuffled_embs = input_embs[X, Y]
-
-        # compute scores
-        scores = self.train_vars['reorder'](
-            shuffled_embs,
-            mask
+        # create padding mask for embeds_per_doc
+        embed_pad_mask = tensor_utils.get_pad_mask(
+            embeds_per_doc.shape[:-1],
+            np.array(sent_lengths),
+            embeds_per_doc.device,
         )
 
-        # compute loss
-        mask = ~mask
-        labels = Y.to(torch.float32)
+        # get tensor dimensions
+        N, L, D = embeds_per_doc.shape
+
+        # create indexing arrays for shuffling
+        X = np.arange(N)[None].T.repeat(L, axis=-1)
+        Y = np.arange(L)[None].repeat(N, axis=0)
+
+        # shuffle the indices while ignoring the padded dimensions
+        for row, length in zip(range(N), sent_lengths):
+            Y[row, :length] = np.random.permutation(length)
+
+        # shuffle embeddings using the indices generated from above
+        shuffled_embs = embeds_per_doc[X, Y]
+
+        scores = self.train_vars['reorder'](shuffled_embs)
+        labels = torch.tensor(
+            Y, 
+            dtype=torch.float32, 
+            device=scores.device,
+        ) 
+
         loss = self.loss_fn(
-            scores[mask],
-            labels[mask],
+            scores,
+            labels,
         )
 
-        # compute correlation scores
+        """
+        preds = torch.argsort(scores)
+        tau, p_tau = kendalltau(Y, preds.cpu().numpy())
+        rho, p_rho = spearmanr(
+            Y.flatten(), 
+            preds.cpu().numpy().flatten()
+        )
+        """
         scores = scores.detach().cpu().numpy()
-        mask = mask.cpu().numpy()
-        preds = [scrs[msk] for scrs, msk in zip(scores, mask)]
-
-        Y = Y.cpu().numpy()
         kendall = [
-            tuple(kendalltau(y[msk], pred))
-            for y, msk, pred in zip(Y, mask, preds)
+            tuple(kendalltau(y, score))
+            for y, score in zip(Y, scores)
+            #tuple(kendalltau(y[msk], pred))
+            #for y, msk, pred in zip(Y, mask, preds)
         ]
         tau, p_tau = zip(*kendall)
         tau = np.mean(tau)
         p_tau = np.mean(p_tau)
 
         spearman = [
-            tuple(spearmanr(y[msk], pred))
-            for y, msk, pred in zip(Y, mask, preds)
+            tuple(spearmanr(y, score))
+            for y, score in zip(Y, scores)
+            #tuple(spearmanr(y[msk], pred))
+            #for y, msk, pred in zip(Y, mask, preds)
         ]
         rho, p_rho = zip(*spearman)
         rho = np.mean(rho)
@@ -208,7 +241,7 @@ class TrainerSentEmbedReordering(Trainer):
             'p_rho': float(p_rho),
         }
 
-    def on_eval_end(self, metrics: Dict[str, list], mode: str):
+    def on_eval_end(self, metrics: List, mode: str):
         """
         use this to aggregate your metrics collected from the outputs of 
         eval_step()
@@ -224,16 +257,19 @@ class TrainerSentEmbedReordering(Trainer):
             log_values[Dict[Dict[str, T]]]: 
         """
 
-        eval_results = {'scalar': {}}
-        #metrics_ds = Dataset.from_list(metrics['val_loader'])
-        for name, metric_ds in metrics.items():
-            metric_ds = Dataset.from_list(metric_ds)
-            eval_results['scalar'].update({
-                f'loss/{name}': np.mean(metric_ds['loss']),
-                f'tau/{name}': np.mean(metric_ds['tau']),
-                f'rho/{name}': np.mean(metric_ds['rho']),
-                f'p_tau/{name}': np.mean(metric_ds['p_tau']),
-                f'p_rho/{name}': np.mean(metric_ds['p_rho']),
-            })
+        metrics_ds = Dataset.from_list(metrics['val_loader'])
+        loss = np.mean(metrics_ds['loss'])
+        tau = np.mean(metrics_ds['tau'])
+        rho = np.mean(metrics_ds['rho'])
+        p_tau = np.mean(metrics_ds['p_tau'])
+        p_rho = np.mean(metrics_ds['p_rho'])
 
-        return eval_results['scalar']['loss/val_loader'], eval_results
+        return rho, {
+            'scalar' : {
+                'loss' : loss,
+                'tau': tau,
+                'rho': rho,
+                'p_tau': p_tau,
+                'p_rho': p_rho,
+            }
+        }

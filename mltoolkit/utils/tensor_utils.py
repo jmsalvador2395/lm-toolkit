@@ -64,14 +64,14 @@ def get_causal_mask(S: int, device='cpu') -> torch.Tensor:
 
 def get_pad_mask(
         shape: Tuple[int],
-        start_indices: List[int] | ndarray | Tensor,
+        start_indices: torch.Tensor,
         device: str='cpu') -> torch.Tensor:
     """
     returns a 2d padding tensor of shape `shape`
 
     Input:
     - shape: the shape of the padding tensor
-    - start_indices[List[int], ndarray, Tensor]: the list-like obbject
+    - start_indices[List[int], ndarray, Tensor]: the list-like object
       that contains the indices that correspond to where the padding
       should start
     - device[int]: the device to store the array
@@ -86,6 +86,12 @@ def get_pad_mask(
         dtype=torch.bool,
         device=device,
     )
+    if type(start_indices) == list:
+        start_indices = torch.tensor(
+            start_indices, 
+            device=device,
+            dtype=torch.int64,
+        )
 
     targets = (start_indices >= 0) & (start_indices < shape[-1])
     pad_mask[targets, start_indices[targets]] = True
