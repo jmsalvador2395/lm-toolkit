@@ -43,19 +43,15 @@ class TrainerSentEmbedReordering(Trainer):
 
         # define models
         model_name = "mixedbread-ai/mxbai-embed-large-v1"
-        """
-        encoder = from_hf(
-            model_name, 
-            emb_dim=1024, 
-            max_seq_len=512,
-            cache_dir=cfg.paths['cache'],
-        )
-        """
         encoder = AutoModel.from_pretrained(
             model_name,
             cache_dir=cfg.paths['cache'],
         )
-        encoder.train()
+
+        # freeze encoder if specified
+        if cfg.params['freeze_encoder']:
+            encoder.eval()
+
         model = SentEmbedReorder(**cfg.params)
 
         tok = AutoTokenizer.from_pretrained(model_name)
@@ -89,9 +85,13 @@ class TrainerSentEmbedReordering(Trainer):
     def step(self, batch: T, mode='train'):
 
         tok = self.train_vars['tok']
+        seq_len = self.cfg.params['seq_len']
 
         # convert docs to batch of sentences
-        sent_batch = [sent_tokenize(el) for el in batch['text']]
+        # NOTE: this also truncates each document down to 
+        #       `seq_len` sentences
+        sent_batch = \
+            [sent_tokenize(el)[:seq_len] for el in batch['text']]
         N = len(sent_batch)
 
         # get number of sentences per doc
@@ -110,8 +110,13 @@ class TrainerSentEmbedReordering(Trainer):
                 return_tensors='pt').to(self.accel.device)
 
         # get sentence embeddings
-        sent_embeds = \
-            self.train_vars['encoder'](**tokens)['pooler_output']
+        if self.cfg.params['freeze_encoder']:
+            with torch.no_grad():
+                sent_embeds = \
+                    self.train_vars['encoder'](**tokens)['pooler_output']
+        else:
+            sent_embeds = \
+                self.train_vars['encoder'](**tokens)['pooler_output']
         
         # group sentence embeddings by document
         embeds_per_doc = torch.split(sent_embeds, sent_lengths)
@@ -128,52 +133,56 @@ class TrainerSentEmbedReordering(Trainer):
         N, L, D = embeds_per_doc.shape
 
         # create indexing arrays for shuffling
-        X = np.arange(N)[None].T.repeat(L, axis=-1)
-        Y = np.arange(L)[None].repeat(N, axis=0)
+        #X = np.arange(N)[None].T.repeat(L, dim=-1)
+        #Y = np.arange(L)[None].repeat(N, dim=0)
+        X = torch.arange(N)[None].T.repeat((1, L))
+        Y = torch.arange(L)[None].repeat((N, 1))
 
         # shuffle the indices while ignoring the padded dimensions
         for row, length in zip(range(N), sent_lengths):
-            Y[row, :length] = np.random.permutation(length)
+            #Y[row, :length] = np.random.permutation(length)
+            Y[row, :length] = torch.randperm(length, device=Y.device)
 
         # shuffle embeddings using the indices generated from above
         shuffled_embs = embeds_per_doc[X, Y]
 
+        # create mask to train on specific outputs
+        label_mask = ~embed_pad_mask
+
+        # compute scores
         scores = self.train_vars['reorder'](shuffled_embs)
+        scores_masked = scores[label_mask]
+
+        # set labels
         labels = torch.tensor(
             Y, 
             dtype=torch.float32, 
             device=scores.device,
         ) 
+        labels = labels[label_mask]
 
+        # compute loss
         loss = self.loss_fn(
-            scores,
+            scores_masked,
             labels,
         )
 
-        """
-        preds = torch.argsort(scores)
-        tau, p_tau = kendalltau(Y, preds.cpu().numpy())
-        rho, p_rho = spearmanr(
-            Y.flatten(), 
-            preds.cpu().numpy().flatten()
-        )
-        """
+        # convert tensors to numpy
         scores = scores.detach().cpu().numpy()
+        Y = Y.cpu().numpy()
+        label_mask = label_mask.cpu().numpy()
+
         kendall = [
-            tuple(kendalltau(y, score))
-            for y, score in zip(Y, scores)
-            #tuple(kendalltau(y[msk], pred))
-            #for y, msk, pred in zip(Y, mask, preds)
+            tuple(kendalltau(y[mask], score[mask]))
+            for y, score, mask in zip(Y, scores, label_mask)
         ]
         tau, p_tau = zip(*kendall)
         tau = np.mean(tau)
         p_tau = np.mean(p_tau)
 
         spearman = [
-            tuple(spearmanr(y, score))
-            for y, score in zip(Y, scores)
-            #tuple(spearmanr(y[msk], pred))
-            #for y, msk, pred in zip(Y, mask, preds)
+            tuple(spearmanr(y[mask], score[mask]))
+            for y, score, mask in zip(Y, scores, label_mask)
         ]
         rho, p_rho = zip(*spearman)
         rho = np.mean(rho)

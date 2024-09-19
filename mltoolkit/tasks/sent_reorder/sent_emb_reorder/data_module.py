@@ -73,7 +73,8 @@ def get_dataloaders(cfg):
     seed_worker, g = tensor_utils.get_dl_params(cfg.general['seed'])
 
     train_loader = DataLoader(
-        train_data,
+        #train_data,
+        roc['train'],
         batch_size=cfg.params['batch_size'],
         num_workers=cfg.params['num_proc'],
         shuffle=True,
