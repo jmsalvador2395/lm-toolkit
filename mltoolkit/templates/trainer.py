@@ -254,8 +254,11 @@ class Trainer:
         """
         applies no_grad() and model.eval() and then evaluates
         """
+        training_models = []
         for model in self.model_keys:
-            self.train_vars[model].eval()
+            if self.train_vars[model].training:
+                self.train_vars[model].eval()
+                training_models.append(model)
         with torch.no_grad():
 
             score, aggregate_metrics = self.evaluate(
@@ -263,7 +266,7 @@ class Trainer:
                 cr=cr
             )
 
-        for model in self.model_keys:
+        for model in training_models:
             self.train_vars[model].train()
         return score, aggregate_metrics
 
