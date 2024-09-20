@@ -30,7 +30,9 @@ params:
 
   # optimizer params
   lr: 0.0000633969
+  encoder_lr: 5e-5
   weight_decay: 0.0601446424
+  encoder_weight_decay: .0601
   beta1: .9
   beta2: .999
   eps: 1.0e-8
@@ -58,8 +60,12 @@ params:
 search_params:
   search_type: 'random'
   search_steps: 60
-  train_step_limit: 150
+  train_step_limit: 300
   weight_decay:
+    values: [1.0e-6, 1.0e-1]
+    num_samples: 10
+    dtype: "float"
+  encoder_weight_decay:
     values: [1.0e-6, 1.0e-1]
     num_samples: 10
     dtype: "float"
@@ -67,8 +73,12 @@ search_params:
     values: [1.0e-7, 1.0e-4]
     num_samples: 10
     dtype: "float"
+  encoder_lr: 
+    values: [1.0e-7, 1.0e-4]
+    num_samples: 10
+    dtype: "float"
   dropout:
-    values: [0.0, 0.1]
+    values: [0.0, 0.2]
     num_samples: 10
     dtype: "float"
 
