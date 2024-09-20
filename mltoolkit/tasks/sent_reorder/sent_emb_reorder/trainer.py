@@ -150,7 +150,10 @@ class TrainerSentEmbedReordering(Trainer):
         label_mask = ~embed_pad_mask
 
         # compute scores
-        scores = self.train_vars['reorder'](shuffled_embs)
+        scores = self.train_vars['reorder'](
+            shuffled_embs, 
+            embed_pad_mask
+        )
         scores_masked = scores[label_mask]
 
         # set labels

@@ -17,21 +17,6 @@ def get_dataloaders(cfg):
     retrieves dataset and converts to dataloaders
     """
 
-    """
-    # set the save directory of the dataset to be created
-    trgt_dir = cfg.paths['cache'] + 'sent_emb_reorder'
-
-    # try to load the dataset
-    try:
-        ds = datasets.load_from_disk(trgt_dir)
-        ds_loaded = True
-    except:
-        ds_loaded = False
-    # loads the dataset from scratch if no local copy is found
-    if not ds_loaded:
-    """
-
-    # TAB HERE
     # load in ROCstories
     roc = datasets.load_dataset(
         'Ximing/ROCStories',
@@ -67,8 +52,6 @@ def get_dataloaders(cfg):
         cnndm['train'],
         wiki['train'],
     ))
-
-    ###### TAB HERE
 
     seed_worker, g = tensor_utils.get_dl_params(cfg.general['seed'])
 

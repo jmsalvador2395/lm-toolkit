@@ -59,11 +59,14 @@ class SentEmbedReorder(nn.Module):
         self.mlp = nn.Sequential(*module_list)
 
 
-    def forward(self, X):
+    def forward(self, X, mask):
         N, L, D = X.shape
         if self.with_positions:
             X += self.positions[None, :L]
-        scores = self.encoder(X)
+        scores = self.encoder(
+            X,
+            src_key_padding_mask=mask,
+        )
         scores = self.mlp(scores)
         scores = scores.squeeze(-1)
         return scores
