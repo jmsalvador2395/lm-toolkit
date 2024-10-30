@@ -53,7 +53,8 @@ def get_dataloaders(cfg):
         wiki['train'],
     ))
 
-    seed_worker, g = tensor_utils.get_dl_params(cfg.general['seed'])
+    seed = cfg.general.get('seed') or random.randint(0, 2**64)
+    seed_worker, g = tensor_utils.get_dl_params(seed)
 
     train_loader = DataLoader(
         #train_data,

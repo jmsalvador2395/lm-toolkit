@@ -31,10 +31,11 @@ class Task:
         self.task_name = '<<Template>>'
 
         # seed the random number generators
-        seed = self.cfg.general['seed']
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        random.seed(seed)
+        seed = self.cfg.general.get('seed')
+        if seed is not None:
+            torch.manual_seed(seed)
+            np.random.seed(seed)
+            random.seed(seed)
 
 
     def train(self):

@@ -63,6 +63,12 @@ class TrainerSentEmbedReordering(Trainer):
             weight_decay=self.cfg.params['weight_decay']
         )
 
+        enc_optimizer = torch.optim.AdamW(
+            encoder.parameters(),
+            lr=self.cfg.params['encoder_lr'],
+            weight_decay=self.cfg.params['encoder_weight_decay'],
+        )
+
         # scheduler
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer,
@@ -78,9 +84,55 @@ class TrainerSentEmbedReordering(Trainer):
             'tok': tok,
             'train_loader': train_loader,
             'val_loader': val_loader,
+            'enc_optimizer': enc_optimizer,
             'optimizer': optimizer,
-            'scheduler': scheduler
+            'scheduler': scheduler,
         }
+    def hinge_loss(self, scores, X, Y, mask):
+        N = len(X)
+        unshuffled_scores = scores[X, Y]
+        zero = torch.tensor(0, device=unshuffled_scores.device)
+        loss = torch.max(
+            zero, 
+            unshuffled_scores[range(N), 1:] \
+                - unshuffled_scores[range(N), :-1] \
+                + 1
+        )
+        loss = torch.mean(loss[mask[range(N), 1:]])
+        
+        return loss
+
+    def cross_entropy_loss(self, scores, X, Y, mask):
+        # TODO finish calculating this with a mask
+        # TODO make this a function.
+        exps = torch.exp(scores)
+        exps = torch.masked_fill(~mask, float('-inf'))
+        exp_sums = torch.sum(exps, axis=1)[:, None]
+        softmax = exps/exp_sums
+        loss = torch.mean(-torch.log(softmax[mask]))
+
+        return loss
+
+    def pairwise_logistic_loss(self, scores, X, Y, mask):
+
+        unshuf_scores = scores[X, Y]
+        loss = torch.log(
+            1 + torch.exp(
+                unshuf_scores[..., :-1]
+                - unshuf_scores[..., 1:]
+            )
+        )
+        loss = torch.mean(loss[mask[..., 1:]])
+        return loss
+
+    def approx_ndcg(self, scores, X, Y, mask):
+        """
+        implement function from:
+            https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-2008-164.pdf
+        """
+        pass
+
+
 
     def step(self, batch: T, mode='train'):
 
@@ -165,10 +217,13 @@ class TrainerSentEmbedReordering(Trainer):
         labels = labels[label_mask]
 
         # compute loss
+        """
         loss = self.loss_fn(
             scores_masked,
             labels,
         )
+        """
+        loss = self.pairwise_logistic_loss(scores, X, Y, label_mask)
 
         # convert tensors to numpy
         scores = scores.detach().cpu().numpy()
