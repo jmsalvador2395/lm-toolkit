@@ -5,12 +5,13 @@ paths:
   
 general: 
   task: "sent_emb_reorder"
-  seed: 128
+  seed: null
   note: "a quick note about this training run. this note will show up in tensorboard."
 
 params:
   save_criterion: "max"
   save_checkpoint: True
+  patience: 3
 
   # model params
   encoder: "mixedbread-ai/mxbai-embed-large-v1"
@@ -37,6 +38,7 @@ params:
   beta2: .999
   eps: 1.0e-8
   clip_max_norm: 1
+  alpha: .1
 
   # optimizer scheduler
   sched_step_size: 5
@@ -59,8 +61,8 @@ params:
 # only the values specificed in the "values" argument will be used
 search_params:
   search_type: 'random'
-  search_steps: 60
-  train_step_limit: 300
+  search_steps: 120
+  train_step_limit: 600
   weight_decay:
     values: [1.0e-6, 1.0e-1]
     num_samples: 10
@@ -81,4 +83,7 @@ search_params:
     values: [0.0, 0.2]
     num_samples: 10
     dtype: "float"
-
+  alpha:
+    values: [1.0e-3, 1.0]
+    num_samples: 10
+    dtype: "float"

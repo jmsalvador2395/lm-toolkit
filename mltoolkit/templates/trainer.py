@@ -285,7 +285,7 @@ class Trainer:
                 for batch in tqdm(self.train_vars[loader_key], 
                              total=len(self.train_vars[loader_key]),
                              desc=f'validating on {loader_key}',
-                             leave=False):
+                             position=1):
                     metric_lists[loader_key].append(self.eval_step(batch, loader_key))
             else:
                 for batch in self.train_vars[loader_key]:
@@ -337,6 +337,8 @@ class Trainer:
         eval_freq = cfg.params['eval_freq']
         log_freq = cfg.params['log_freq']
         skip = cfg.params['skip_first_eval']
+        patience = cfg.params.get('patience', 2**64)
+        patience_counter = 0
         last_ckpt = 0
 
         if step_limit is not None:
@@ -365,7 +367,8 @@ class Trainer:
                 bar_range = total_steps
             prog_bar = tqdm(
                 range(bar_range),
-                desc=cfg.general["experiment_name"]
+                desc=cfg.general["experiment_name"],
+                position=0,
             )
 
         # enter training loop
@@ -425,6 +428,7 @@ class Trainer:
 
                     # save model state dictionary
                     if self.save_criterion(last_score, local_best_score):
+                        patience_counter = 0
 
                         local_best_score = last_score
                         if save_ckpt and self.save_criterion(local_best_score, global_best_score):
@@ -440,6 +444,21 @@ class Trainer:
                                     max_shard_size="5GB",
                                     safe_serialization=True
                                 )
+                    else:
+                        patience_counter += 1
+                        if patience_counter >= patience:
+                            if self.accel.is_main_process:
+                                prog_bar.close()
+                                display.done(
+                                    f'Patience Limit ({patience}) reached.'
+                                )
+                                display.title(
+                                    f'Triggered Early Stopping', 
+                                    fill_char='-'
+                                )
+                                self.writer.close()
+                            return last_score
+                        
 
                 """
                 check if manual step limit has been reached.

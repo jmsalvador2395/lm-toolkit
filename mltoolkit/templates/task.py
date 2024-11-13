@@ -32,10 +32,11 @@ class Task:
 
         # seed the random number generators
         seed = self.cfg.general.get('seed')
-        if seed is not None:
-            torch.manual_seed(seed)
-            np.random.seed(seed)
-            random.seed(seed)
+        seed = seed or random.randint(0, 2**32-1)
+
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
 
 
     def train(self):
@@ -168,6 +169,11 @@ class Task:
         out_ds = []
         for param_set in search_space:
             out_ds.append({name: val for name, val in zip(params, param_set)})
+        experiment_name = self.cfg.general['experiment_name']
+        out_ds = [
+            sample | {'experiment': f'{experiment_name}/search-{i:03}'}
+            for i, sample in enumerate(out_ds)
+        ]
         out_ds = Dataset.from_list(out_ds)
 
         if accel.is_main_process:

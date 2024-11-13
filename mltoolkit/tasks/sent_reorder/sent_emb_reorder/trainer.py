@@ -11,6 +11,7 @@ from scipy.stats import kendalltau, spearmanr
 from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import SentenceTransformer
 from nltk import sent_tokenize
+from torch import Tensor
 
 # for typing
 from typing import Tuple, List, Dict, TypeVar
@@ -131,8 +132,32 @@ class TrainerSentEmbedReordering(Trainer):
             https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-2008-164.pdf
         """
         pass
+    
+    def diff_kendall(self,
+        scores: Tensor, 
+        X: Tensor, 
+        Y: Tensor, 
+        mask: Tensor,
+        alpha: Tensor=.1,
+    ) -> Tensor:
+        dev = scores.device
+        rows, cols = scores.shape
+        N_0 = torch.sum(mask, dim=-1)
+        sums = torch.zeros(rows, device=dev)
+        for i in range(1, cols):
+            for j in range(i):
 
+                term1 = torch.exp(alpha*(scores[:, i] - scores[:, j]))
+                term2 = torch.exp(-alpha*(scores[:, i] - scores[:, j]))
+                term3 = torch.exp(alpha*(Y[:, i] - Y[:, j]))
+                term4 = torch.exp(-alpha*(Y[:, i] - Y[:, j]))
 
+                frac1 = (term1 - term2)/(term1 + term2)
+                frac2 = (term3 - term4)/(term3 + term4)
+
+                sums += (frac1*frac2)*(mask[:, i]*mask[:, j])
+        
+        return torch.mean((1/N_0)*sums)
 
     def step(self, batch: T, mode='train'):
 
@@ -142,8 +167,9 @@ class TrainerSentEmbedReordering(Trainer):
         # convert docs to batch of sentences
         # NOTE: this also truncates each document down to 
         #       `seq_len` sentences
-        sent_batch = \
-            [sent_tokenize(el)[:seq_len] for el in batch['text']]
+        sent_batch = [
+            sent_tokenize(el)[:seq_len] for el in batch['text']
+        ]
         N = len(sent_batch)
 
         # get number of sentences per doc
@@ -223,7 +249,11 @@ class TrainerSentEmbedReordering(Trainer):
             labels,
         )
         """
-        loss = self.pairwise_logistic_loss(scores, X, Y, label_mask)
+        #loss = self.pairwise_logistic_loss(scores, X, Y, label_mask)
+        loss = -self.diff_kendall(
+            scores, X.to(scores.device), 
+            Y.to(scores.device), label_mask,
+        )
 
         # convert tensors to numpy
         scores = scores.detach().cpu().numpy()
