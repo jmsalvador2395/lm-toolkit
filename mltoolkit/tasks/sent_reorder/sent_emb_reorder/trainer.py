@@ -93,7 +93,8 @@ class TrainerSentEmbedReordering(Trainer):
     def hinge_loss(self, scores, X, Y, mask, margin=1):
         rows, cols = X.shape
         total = torch.sum(mask)
-        unshuffled_scores = scores[X, Y]
+        reverse = torch.argsort(Y, dim=-1)
+        unshuffled_scores = scores[X, reverse]
         zero = torch.tensor(0.0, device=unshuffled_scores.device)
 
         sum = torch.tensor(0.0, device=scores.device)

@@ -11,7 +11,7 @@ general:
 params:
   save_criterion: "max"
   save_checkpoint: True
-  patience: 9
+  patience: 3
 
   # model params
   #encoder: "mixedbread-ai/mxbai-embed-large-v1"
@@ -28,7 +28,7 @@ params:
   with_positions: True
   num_xformer_layers: 2
   mlp_hidden_dim: 4096
-  num_mlp_layers: 1
+  num_mlp_layers: 2
 
   dtype: "float32"
 
