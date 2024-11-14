@@ -43,7 +43,6 @@ class TrainerSentEmbedReordering(Trainer):
         train_loader, val_loader = get_dataloaders(cfg)
 
         # define models
-        #model_name = "mixedbread-ai/mxbai-embed-large-v1"
         model_name = cfg.params['encoder']
         self.model_name = model_name
         encoder = AutoModel.from_pretrained(
@@ -131,13 +130,6 @@ class TrainerSentEmbedReordering(Trainer):
         )
         loss = torch.mean(loss[mask[..., 1:]])
         return loss
-
-    def approx_ndcg(self, scores, X, Y, mask):
-        """
-        implement function from:
-            https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-2008-164.pdf
-        """
-        pass
     
     def diff_kendall(self,
         scores: Tensor, 

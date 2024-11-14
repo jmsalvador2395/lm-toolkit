@@ -11,7 +11,7 @@ general:
 params:
   save_criterion: "max"
   save_checkpoint: True
-  patience: 3
+  patience: 9
 
   # model params
   #encoder: "mixedbread-ai/mxbai-embed-large-v1"
