@@ -169,12 +169,10 @@ class TrainerSentEmbedReordering(Trainer):
         # convert docs to batch of sentences
         # NOTE: this also truncates each document down to 
         #       `seq_len` sentences
-        """
         sent_batch = [
-            sent_tokenize(el)[:seq_len] for el in batch['text']
+            sents[:seq_len] for sents in batch['sentences']
         ]
-        """
-        sent_batch = [text.split('<eos>') for text in batch['text']]
+        #sent_batch = [text.split('<eos>') for text in batch['text']]
         N = len(sent_batch)
 
         # get number of sentences per doc

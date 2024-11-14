@@ -18,6 +18,7 @@ def get_dataloaders(cfg):
     """
     retrieves dataset and converts to dataloaders
     """
+    seed = cfg.general['seed']
 
     # load in SIND
     sind_base = f'{files.project_root()}/data/sind'
@@ -30,6 +31,11 @@ def get_dataloaders(cfg):
         sind_base, data_files=sind_files,
         cache_dir=cfg.paths['cache'],
     )
+    def sind_xform(sample):
+        sents = [text.split('<eos>') for text in sample['text']]
+        sents = [sent.strip() for sent in sents]
+        return {'sentences': sents}
+    sind = sind.with_transform(sind_xform)
     """
     sind = sind.map(
         lambda x: {
@@ -41,15 +47,23 @@ def get_dataloaders(cfg):
     )
     """
 
-    # load in ROCstories
-    roc = datasets.load_dataset(
-        'Ximing/ROCStories',
-        cache_dir=cfg.paths['cache'],
-        trust_remote_code=True,
+    # load in ROCstories and randomly create splits
+    base_path = f'{files.project_root()}/data/ROCStories/'
+    def roc_xform(sample):
+        sents = [sample[f'sentence{i}'] for i in range(1, 6)]
+        return {'sentences': sents}
+    roc = datasets.load_dataset(base_path, cache_dir=cfg.paths['cache'])
+
+    train_test = roc['train'].train_test_split(test_size=0.2, seed=seed)
+    test_val = train_test['test'].train_test_split(
+        test_size=0.5, seed=seed
     )
-    roc = roc.map(roc_map_fn)
-    roc = roc.select_columns('text')
-    #roc.rename_column
+    roc = DatasetDict({
+        'train': train_test['train'],
+        'validation': test_val['train'],
+        'test': test_val['test'],
+    })
+    roc = roc.with_transform(roc_xform)
 
     # load in CNN/DailyMail
     cnndm = datasets.load_dataset(
@@ -82,7 +96,7 @@ def get_dataloaders(cfg):
 
     train_loader = DataLoader(
         #train_data,
-        sind['train'],
+        roc['train'],
         batch_size=cfg.params['batch_size'],
         num_workers=cfg.params['num_proc'],
         shuffle=True,
@@ -91,7 +105,7 @@ def get_dataloaders(cfg):
     )
 
     val_loader = DataLoader(
-        sind['test'],
+        roc['test'],
         batch_size=cfg.params['batch_size'],
         num_workers=cfg.params['num_proc'],
         shuffle=True,

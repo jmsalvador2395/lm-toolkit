@@ -427,7 +427,15 @@ class Trainer:
                         self._log(self.writer, eval_metrics, self.step_counter, mode='val')
 
                     # save model state dictionary
-                    if self.save_criterion(last_score, local_best_score):
+                    if math.isnan(last_score):
+                        if self.accel.is_main_process:
+                            prog_bar.close()
+                            display.title(
+                                'Loss Became NaN', 
+                                fill_char='-'
+                            )
+                        return last_score
+                    elif self.save_criterion(last_score, local_best_score):
                         patience_counter = 0
 
                         local_best_score = last_score
@@ -444,14 +452,6 @@ class Trainer:
                                     max_shard_size="5GB",
                                     safe_serialization=True
                                 )
-                    elif math.isnan(last_score):
-                        if self.accel.is_main_process:
-                            prog_bar.close()
-                            display.title(
-                                'Loss Became NaN', 
-                                fill_char='-'
-                            )
-                        return last_score
                     else:
                         patience_counter += 1
                         if patience_counter >= patience:
