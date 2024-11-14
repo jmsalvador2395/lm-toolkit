@@ -11,7 +11,7 @@ general:
 params:
   save_criterion: "max"
   save_checkpoint: True
-  patience: 3
+  patience: 6
 
   # model params
   encoder: "mixedbread-ai/mxbai-embed-large-v1"
@@ -20,25 +20,27 @@ params:
   nhead: 16
   #dim_feedforward: 2048
   dim_feedforward: 4096
-  dropout: 0.0853056472
+  dropout: 0.1753749333
   activation: 'gelu'
-  n_layers: 2
   sent_len: 128
   seq_len: 128
   with_positions: True
+  num_xformer_layers: 1
+  mlp_hidden_dim: 4096
+  num_mlp_layers: 1
 
   dtype: "float32"
 
   # optimizer params
-  lr: 0.0000633969
-  encoder_lr: 5.0e-5
-  weight_decay: 0.0601446424
-  encoder_weight_decay: .0601
+  lr: 3.08353e-5
+  encoder_lr: 0.0000108555
+  weight_decay: 0.0819916055
+  encoder_weight_decay: 0.0638266831
   beta1: .9
   beta2: .999
   eps: 1.0e-8
   clip_max_norm: 1
-  alpha: .1
+  alpha: .6283707401
 
   # optimizer scheduler
   sched_step_size: 5
@@ -50,7 +52,7 @@ params:
   batch_size: 16
   num_epochs: 40
   eval_freq: 50
-  log_freq: 25
+  log_freq: 100
   num_test_samples: 25
 
   # misc options

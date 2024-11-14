@@ -43,7 +43,9 @@ class TrainerSentEmbedReordering(Trainer):
         train_loader, val_loader = get_dataloaders(cfg)
 
         # define models
-        model_name = "mixedbread-ai/mxbai-embed-large-v1"
+        #model_name = "mixedbread-ai/mxbai-embed-large-v1"
+        model_name = 'facebook/bart-large'
+        self.model_name = model_name
         encoder = AutoModel.from_pretrained(
             model_name,
             cache_dir=cfg.paths['cache'],
@@ -167,9 +169,12 @@ class TrainerSentEmbedReordering(Trainer):
         # convert docs to batch of sentences
         # NOTE: this also truncates each document down to 
         #       `seq_len` sentences
+        """
         sent_batch = [
             sent_tokenize(el)[:seq_len] for el in batch['text']
         ]
+        """
+        sent_batch = [text.split('<eos>') for text in batch['text']]
         N = len(sent_batch)
 
         # get number of sentences per doc
@@ -185,16 +190,25 @@ class TrainerSentEmbedReordering(Trainer):
                 max_length=self.cfg.params['sent_len'],
                 return_token_type_ids=False,
                 padding=True,
-                return_tensors='pt').to(self.accel.device)
+                return_tensors='pt'
+        ).to(self.accel.device)
 
         # get sentence embeddings
         if self.cfg.params['freeze_encoder']:
             with torch.no_grad():
                 sent_embeds = \
-                    self.train_vars['encoder'](**tokens)['pooler_output']
+                    self.train_vars['encoder'](**tokens)
         else:
             sent_embeds = \
-                self.train_vars['encoder'](**tokens)['pooler_output']
+                self.train_vars['encoder'](**tokens)
+
+        if 'pooler_output' in sent_embeds.keys():
+            sent_embeds = sent_embeds['pooler_output']
+        elif self.model_name == 'facebook/bart-large':
+            sent_embeds = \
+                sent_embeds['encoder_last_hidden_state'][:, 0, :]
+        else:
+            sent_embeds = sent_embeds['last_hidden_state'][:, 0, :]
         
         # group sentence embeddings by document
         embeds_per_doc = torch.split(sent_embeds, sent_lengths)
@@ -235,11 +249,7 @@ class TrainerSentEmbedReordering(Trainer):
         scores_masked = scores[label_mask]
 
         # set labels
-        labels = torch.tensor(
-            Y, 
-            dtype=torch.float32, 
-            device=scores.device,
-        ) 
+        labels = Y.clone().detach().to(torch.float32).to(scores.device)
         labels = labels[label_mask]
 
         # compute loss
@@ -267,6 +277,12 @@ class TrainerSentEmbedReordering(Trainer):
         tau, p_tau = zip(*kendall)
         tau = np.mean(tau)
         p_tau = np.mean(p_tau)
+        """
+        import math
+        if math.isnan(tau):
+            breakpoint()
+        breakpoint()
+        """
 
         spearman = [
             tuple(spearmanr(y[mask], score[mask]))

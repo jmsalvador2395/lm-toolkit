@@ -7,14 +7,38 @@ import numpy as np
 import random
 from nltk import sent_tokenize
 from torch.utils.data import DataLoader
-from datasets import DatasetDict
+from datasets import DatasetDict, Dataset
+import pandas as pd
+import re
 
-from mltoolkit.utils import tensor_utils
+from mltoolkit.utils import tensor_utils, files
 from mltoolkit.models.sent_encoders.hf_models import from_hf
 
 def get_dataloaders(cfg):
     """
     retrieves dataset and converts to dataloaders
+    """
+
+    # load in SIND
+    sind_base = f'{files.project_root()}/data/sind'
+    sind_files = {
+        'train': f'{sind_base}/train.txt',
+        'validation': f'{sind_base}/dev.txt',
+        'test': f'{sind_base}/test.txt',
+    }
+    sind = datasets.load_dataset(
+        sind_base, data_files=sind_files,
+        cache_dir=cfg.paths['cache'],
+    )
+    """
+    sind = sind.map(
+        lambda x: {
+            'text': re.sub(
+                '\s*[^\w\s]?\s*<eos\>\s*[^\w\s]?\s*', 
+                '. ', x['text']
+            )
+        }
+    )
     """
 
     # load in ROCstories
@@ -58,7 +82,7 @@ def get_dataloaders(cfg):
 
     train_loader = DataLoader(
         #train_data,
-        roc['train'],
+        sind['train'],
         batch_size=cfg.params['batch_size'],
         num_workers=cfg.params['num_proc'],
         shuffle=True,
@@ -67,7 +91,7 @@ def get_dataloaders(cfg):
     )
 
     val_loader = DataLoader(
-        roc['test'],
+        sind['test'],
         batch_size=cfg.params['batch_size'],
         num_workers=cfg.params['num_proc'],
         shuffle=True,

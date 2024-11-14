@@ -444,16 +444,22 @@ class Trainer:
                                     max_shard_size="5GB",
                                     safe_serialization=True
                                 )
+                    elif math.isnan(last_score):
+                        if self.accel.is_main_process:
+                            prog_bar.close()
+                            display.title(
+                                'Loss Became NaN', 
+                                fill_char='-'
+                            )
+                        return last_score
                     else:
                         patience_counter += 1
                         if patience_counter >= patience:
                             if self.accel.is_main_process:
                                 prog_bar.close()
-                                display.done(
-                                    f'Patience Limit ({patience}) reached.'
-                                )
                                 display.title(
-                                    f'Triggered Early Stopping', 
+                                    f'Patience Limit ({patience}) '
+                                    f'reached.',
                                     fill_char='-'
                                 )
                                 self.writer.close()
