@@ -44,7 +44,7 @@ class TrainerSentEmbedReordering(Trainer):
 
         # define models
         #model_name = "mixedbread-ai/mxbai-embed-large-v1"
-        model_name = 'facebook/bart-large'
+        model_name = cfg.params['encoder']
         self.model_name = model_name
         encoder = AutoModel.from_pretrained(
             model_name,
@@ -91,18 +91,22 @@ class TrainerSentEmbedReordering(Trainer):
             'optimizer': optimizer,
             'scheduler': scheduler,
         }
-    def hinge_loss(self, scores, X, Y, mask):
-        N = len(X)
+    def hinge_loss(self, scores, X, Y, mask, margin=1):
+        rows, cols = X.shape
+        total = torch.sum(mask)
         unshuffled_scores = scores[X, Y]
-        zero = torch.tensor(0, device=unshuffled_scores.device)
-        loss = torch.max(
-            zero, 
-            unshuffled_scores[range(N), 1:] \
-                - unshuffled_scores[range(N), :-1] \
-                + 1
-        )
-        loss = torch.mean(loss[mask[range(N), 1:]])
-        
+        zero = torch.tensor(0.0, device=unshuffled_scores.device)
+
+        sum = torch.tensor(0.0, device=scores.device)
+        for i in range(cols-1):
+            lower = unshuffled_scores[:, i, None]
+            upper = unshuffled_scores[:, i+1:]
+            msk = mask[:, i+1:]
+
+            losses = torch.max(zero, lower-upper+margin)
+            sum += torch.sum(losses[msk])
+
+        loss = sum/total
         return loss
 
     def cross_entropy_loss(self, scores, X, Y, mask):
@@ -258,8 +262,14 @@ class TrainerSentEmbedReordering(Trainer):
         )
         """
         #loss = self.pairwise_logistic_loss(scores, X, Y, label_mask)
+        """
         loss = -self.diff_kendall(
             scores, X.to(scores.device), 
+            Y.to(scores.device), label_mask,
+        )
+        """
+        loss = self.hinge_loss(
+            scores, X.to(scores.device),
             Y.to(scores.device), label_mask,
         )
 
