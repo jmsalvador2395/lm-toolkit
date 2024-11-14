@@ -11,7 +11,7 @@ general:
 params:
   save_criterion: "max"
   save_checkpoint: True
-  patience: 6
+  patience: 3
 
   # model params
   encoder: "mixedbread-ai/mxbai-embed-large-v1"
@@ -64,7 +64,7 @@ params:
 search_params:
   search_type: 'random'
   search_steps: 120
-  train_step_limit: 600
+  train_step_limit: 900
   weight_decay:
     values: [1.0e-7, 1.0e-1]
     num_samples: 10
