@@ -23,7 +23,7 @@ class SentEmbedReorder(nn.Module):
             dim_feedforward=2048,
             activation='gelu',
             dropout=0.1,
-            num_xformer_layers=3,
+            num_xformer_layers=1,
             mlp_hidden_dim=2048,
             num_mlp_layers=2,
             with_positions=True,
@@ -65,10 +65,7 @@ class SentEmbedReorder(nn.Module):
         N, L, D = X.shape
         if self.with_positions:
             X += self.positions[None, :L]
-        scores = self.encoder(
-            X,
-            src_key_padding_mask=mask,
-        )
+        scores = self.encoder(X, src_key_padding_mask=mask)
         scores = self.mlp(scores)
         scores = scores.squeeze(-1)
         return scores

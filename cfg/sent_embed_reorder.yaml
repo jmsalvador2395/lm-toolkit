@@ -11,7 +11,7 @@ general:
 params:
   save_criterion: "max"
   save_checkpoint: True
-  patience: 9
+  patience: 18
 
   # model params
   #encoder: "mixedbread-ai/mxbai-embed-large-v1"
@@ -22,11 +22,11 @@ params:
   #dim_feedforward: 2048
   dim_feedforward: 4096
   dropout: 0.1753749333
-  activation: 'gelu'
+  activation: 'relu'
   sent_len: 128
   seq_len: 128
   with_positions: True
-  num_xformer_layers: 2
+  num_xformer_layers: 1
   mlp_hidden_dim: 4096
   num_mlp_layers: 1
 
@@ -52,7 +52,7 @@ params:
   shuffle: True
   batch_size: 16
   num_epochs: 40
-  eval_freq: 150
+  eval_freq: 300
   log_freq: 50
   num_test_samples: 25
 
