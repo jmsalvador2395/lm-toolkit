@@ -8,21 +8,24 @@ import os
 from . import strings
 
 def title(title_str: str, fill_char: str='='):
-	"""
-	prints the given title centered in the terminal and surrounded by fill_char 
+    """
+    prints the given title centered in the terminal and surrounded by fill_char 
 
-	:param title_str: the text to print in the middle
-	:type title_str: str
+    :param title_str: the text to print in the middle
+    :type title_str: str
 
-	:param fill_char: the character to be used to fill out the rest of the line. (default '='
-	:type fill_char: str
-	"""
+    :param fill_char: the character to be used to fill out the rest of the line. (default '='
+    :type fill_char: str
+    """
 
-	# get terminal size
-	col, lines = os.get_terminal_size()
+    # get terminal size
+    try:
+        col, lines = os.get_terminal_size()
+    except Exception as e:
+        col, lines = 1080, 128
 
-	# print the title
-	print('\n' + title_str.center(col, fill_char) + '\n')
+    # print the title
+    print('\n' + title_str.center(col, fill_char) + '\n')
 
 def with_header(msg: str, header, color='green', end='\n'):
     """
