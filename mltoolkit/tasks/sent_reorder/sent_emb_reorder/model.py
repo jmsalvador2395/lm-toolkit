@@ -52,8 +52,9 @@ class SentEmbedReorder(nn.Module):
         module_list = [nn.Linear(d_model, mlp_hidden_dim), nn.ReLU()]
         module_list += (num_mlp_layers-1)*[
             nn.Linear(mlp_hidden_dim, mlp_hidden_dim), 
-            nn.ReLU(),
             nn.LayerNorm(mlp_hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout)
         ]
         module_list.append(nn.Linear(mlp_hidden_dim, 1))
 

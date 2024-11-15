@@ -11,7 +11,7 @@ general:
 params:
   save_criterion: "max"
   save_checkpoint: True
-  patience: 3
+  patience: 9
 
   # model params
   #encoder: "mixedbread-ai/mxbai-embed-large-v1"
@@ -28,7 +28,7 @@ params:
   with_positions: True
   num_xformer_layers: 2
   mlp_hidden_dim: 4096
-  num_mlp_layers: 2
+  num_mlp_layers: 1
 
   dtype: "float32"
 
@@ -67,26 +67,22 @@ search_params:
   search_steps: 120
   train_step_limit: 900
   weight_decay:
-    values: [1.0e-7, 1.0e-1]
+    values: [1.0e-7, 10]
     num_samples: 10
     dtype: "float"
   encoder_weight_decay:
-    values: [1.0e-7, 1.0e-1]
+    values: [1.0e-7, 10]
     num_samples: 10
     dtype: "float"
   lr: 
-    values: [1.0e-7, 5.0e-3]
+    values: [1.0e-7, 1.0e-2]
     num_samples: 10
     dtype: "float"
   encoder_lr: 
-    values: [1.0e-7, 5.0e-3]
+    values: [1.0e-8, 5.0e-3]
     num_samples: 10
     dtype: "float"
   dropout:
     values: [0.0, 0.2]
-    num_samples: 10
-    dtype: "float"
-  alpha:
-    values: [1.0e-5, 1.0]
     num_samples: 10
     dtype: "float"
