@@ -72,11 +72,17 @@ class TrainerSentEmbedReordering(Trainer):
         )
 
         # scheduler
-        scheduler = torch.optim.lr_scheduler.StepLR(
+        lr_sched = torch.optim.lr_scheduler.StepLR(
             optimizer,
             cfg.params['sched_step_size'],
             gamma=cfg.params['sched_gamma'],
         )
+        enc_sched = torch.optim.lr_scheduler.StepLR(
+            enc_optimizer,
+            cfg.params['sched_step_size'],
+            gamma=cfg.params['sched_gamma'],
+        )
+
 
         self.loss_fn = nn.HuberLoss()
 
@@ -88,7 +94,8 @@ class TrainerSentEmbedReordering(Trainer):
             'val_loader': val_loader,
             'enc_optimizer': enc_optimizer,
             'optimizer': optimizer,
-            'scheduler': scheduler,
+            'scheduler': lr_sched,
+            'enc_scheduler': enc_sched,
         }
     def hinge_loss(self, scores, X, Y, mask, margin=1):
         rows, cols = X.shape
@@ -378,7 +385,7 @@ class TrainerSentEmbedReordering(Trainer):
         p_tau = np.mean(metrics_ds['p_tau'])
         p_rho = np.mean(metrics_ds['p_rho'])
 
-        return rho, {
+        return tau, {
             'scalar' : {
                 'loss' : loss,
                 'tau': tau,

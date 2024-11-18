@@ -60,6 +60,29 @@ class SentEmbedReorder(nn.Module):
 
         self.mlp = nn.Sequential(*module_list)
 
+        self._init_weights()
+
+    def _init_weights(self):
+        for layer in self.modules():
+            if isinstance(layer, nn.Linear):
+                nn.init.kaiming_uniform_(
+                    layer.weight, nonlinearity='relu'
+                )
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias)
+            elif isinstance(layer, nn.Embedding):
+                nn.init.uniform_(layer.weight, -0.1, 0.1)
+            elif isinstance(layer, nn.TransformerEncoderLayer):
+                for sublayer in layer.children():
+                    if isinstance(sublayer, nn.Linear):
+                        nn.init.kaiming_uniform_(
+                            sublayer.weight, nonlinearity='relu'
+                        )
+                        if sublayer.bias is not None:
+                            nn.init.zeros_(sublayer.bias)
+                    elif isinstance(sublayer, nn.LayerNorm):
+                        nn.init.ones_(sublayer.weight)
+                        nn.init.zeros_(sublayer.bias)
 
     def forward(self, X, mask):
         N, L, D = X.shape

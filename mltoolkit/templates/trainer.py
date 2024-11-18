@@ -35,6 +35,14 @@ class Trainer:
         self.debug = debug
         self.experiment_name = cfg.general['experiment_name']
         self.accel = accelerator
+
+        # seed the random number generators
+        seed = cfg.general.get('seed') or random.randint(0, 2**32-1)
+        cfg.general['seed'] = seed
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+
         if type(accelerator) != Accelerator:
             self.accel = Accelerator()
 
@@ -415,6 +423,16 @@ class Trainer:
                         })
 
                         self._log(self.writer, trn_metrics, self.step_counter, mode='train')
+                
+                # check if loss is nan
+                if torch.isnan(loss):
+                    if self.accel.is_main_process:
+                        prog_bar.close()
+                        display.title(
+                            'Loss Became NaN', 
+                            fill_char='-'
+                        )
+                    return last_score
 
                 """
                 do evaluation procedure, log, and save model

@@ -30,15 +30,10 @@ class Task:
         self.trainer_cls = None
         self.task_name = '<<Template>>'
 
-        # seed the random number generators
-        seed = self.cfg.general.get('seed')
-        if seed is None:
-            seed = seed or random.randint(0, 2**32-1)
-            cfg.general['seed'] = seed
+        # generate seed if none exists
+        seed = cfg.general.get('seed') or random.randint(0, 2**32-1)
+        cfg.general['seed'] = seed
 
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        random.seed(seed)
 
 
     def train(self):
