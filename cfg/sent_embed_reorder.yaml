@@ -11,7 +11,7 @@ general:
 params:
   save_criterion: "max"
   save_checkpoint: True
-  patience: 18
+  patience: 2
 
   # model params
   #encoder: "mixedbread-ai/mxbai-embed-large-v1"
@@ -21,7 +21,7 @@ params:
   nhead: 16
   #dim_feedforward: 2048
   dim_feedforward: 4096
-  dropout: 0.1753749333
+  dropout: 0.025460901157708094
   activation: 'relu'
   sent_len: 128
   seq_len: 128
@@ -33,10 +33,10 @@ params:
   dtype: "float32"
 
   # optimizer params
-  lr: 3.08353e-5
-  encoder_lr: 0.0000108555
-  weight_decay: 0.0819916055
-  encoder_weight_decay: 0.0638266831
+  lr: 6.283782594219281e-05
+  encoder_lr: 5.11946907872248e-06
+  weight_decay: 0.0949421902992112
+  encoder_weight_decay: 0.0008786740879220809
   beta1: .9
   beta2: .999
   eps: 1.0e-8
@@ -52,7 +52,7 @@ params:
   shuffle: True
   batch_size: 16
   num_epochs: 40
-  eval_freq: 300
+  eval_freq: 2000
   log_freq: 50
   num_test_samples: 25
 
@@ -64,14 +64,14 @@ params:
 # only the values specificed in the "values" argument will be used
 search_params:
   search_type: 'random'
-  search_steps: 120
-  train_step_limit: 900
+  search_steps: 240
+  train_step_limit: null
   weight_decay:
-    values: [1.0e-7, 10]
+    values: [1.0e-6, 1.0e+1]
     num_samples: 10
     dtype: "float"
   encoder_weight_decay:
-    values: [1.0e-7, 10]
+    values: [1.0e-6, 1.0e+1]
     num_samples: 10
     dtype: "float"
   lr: 
@@ -79,10 +79,16 @@ search_params:
     num_samples: 10
     dtype: "float"
   encoder_lr: 
-    values: [1.0e-8, 5.0e-3]
+    values: [1.0e-8, 1.0e-4]
     num_samples: 10
     dtype: "float"
   dropout:
     values: [0.0, 0.2]
     num_samples: 10
     dtype: "float"
+  mlp_hidden_dim: 
+    values: [2048, 4096]
+    dtype: "int"
+  num_xformer_layers: 
+    values: [1, 2, 3, 4, 5, 6]
+    dtype: "int"
