@@ -1,48 +1,60 @@
 paths:
   logdir_base: "{{project_root}}/tensorboard"
-  cache: "{{project_root}}/data/cache"
+  cache: "/data/john/cache"
   results: "{{project_root}}/results"
   
 general: 
-  task: "sent_emb_reorder_5"
-  seed: 128
+  task: "sent_emb_reorder"
+  seed: null
   note: "a quick note about this training run. this note will show up in tensorboard."
 
 params:
   save_criterion: "max"
   save_checkpoint: True
+  patience: 2
 
   # model params
+  #encoder: "mixedbread-ai/mxbai-embed-large-v1"
+  encoder: "facebook/bart-large"
+  freeze_encoder: False
   d_model: 1024
   nhead: 16
-  dim_feedforward: 2048
-  dropout: 0.0010464151
-  activation: 'gelu'
-  n_layers: 1
-  seq_len: 5
+  #dim_feedforward: 2048
+  dim_feedforward: 4096
+  dropout: 0.03365699945489358
+  activation: 'relu'
+  sent_len: 128
+  seq_len: 128
   with_positions: True
+  num_xformer_layers: 1
+  mlp_hidden_dim: 4096
+  num_mlp_layers: 1
 
   dtype: "float32"
 
   # optimizer params
-  lr: 0.000136149
-  weight_decay: 0.0907614082
+  lr: 0.0003232818571945758
+  encoder_lr: 9.989143690263446e-07
+  weight_decay: 10.0
+  #encoder_weight_decay: 0.9816278385268167
+  encoder_weight_decay: 100.0
   beta1: .9
   beta2: .999
   eps: 1.0e-8
   clip_max_norm: 1
+  alpha: .6283707401
 
   # optimizer scheduler
   sched_step_size: 5
-  sched_gamma: 0.9
+  sched_gamma: 0.998
 
   # data params
-  num_proc: 20
+  num_proc: 10
   shuffle: True
-  batch_size: 59
-  num_epochs: 30
-  eval_freq: 300
-  log_freq: 100
+  batch_size: 16
+  num_epochs: 40
+  eval_freq: 2000
+  log_freq: 50
   num_test_samples: 25
 
   # misc options
@@ -53,22 +65,13 @@ params:
 # only the values specificed in the "values" argument will be used
 search_params:
   search_type: 'random'
-  search_steps: 60
+  search_steps: 240
   train_step_limit: null
   weight_decay:
-    values: [1.0e-6, 1.0e-1]
+    values: [1.0e+0, 1.0e+3]
     num_samples: 10
     dtype: "float"
-  lr: 
-    values: [1.0e-7, 1.0e-3]
+  encoder_weight_decay:
+    values: [1.0e+0, 1.0e+3]
     num_samples: 10
     dtype: "float"
-  dropout:
-    values: [0.0, 0.1]
-    num_samples: 10
-    dtype: "float"
-  batch_size:
-    values: [4, 8, 16, 32, 64, 128, 256, 512]
-    #num_samples: null
-    dtype: "int"
-

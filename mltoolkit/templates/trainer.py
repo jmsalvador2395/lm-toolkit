@@ -449,7 +449,7 @@ class Trainer:
                         if self.accel.is_main_process:
                             prog_bar.close()
                             display.title(
-                                'Loss Became NaN', 
+                                'Evaluation Criteria is NaN', 
                                 fill_char='-'
                             )
                         return last_score

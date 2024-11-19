@@ -19,28 +19,27 @@ params:
   freeze_encoder: False
   d_model: 1024
   nhead: 16
-  #dim_feedforward: 2048
   dim_feedforward: 4096
-  dropout: 0.025460901157708094
+  dropout: 0.03365699945489358
   activation: 'relu'
   sent_len: 128
   seq_len: 128
   with_positions: True
-  num_xformer_layers: 1
+  num_xformer_layers: 2
   mlp_hidden_dim: 4096
   num_mlp_layers: 1
 
   dtype: "float32"
 
   # optimizer params
-  lr: 6.283782594219281e-05
-  encoder_lr: 5.11946907872248e-06
-  weight_decay: 0.0949421902992112
-  encoder_weight_decay: 0.0008786740879220809
+  lr: 0.0005
+  encoder_lr: 5.0e-6
+  weight_decay: 1.0
+  encoder_weight_decay: 10.0
   beta1: .9
   beta2: .999
   eps: 1.0e-8
-  clip_max_norm: 1
+  clip_max_norm: 10
   alpha: .6283707401
 
   # optimizer scheduler
@@ -67,28 +66,22 @@ search_params:
   search_steps: 240
   train_step_limit: null
   weight_decay:
-    values: [1.0e-6, 1.0e+1]
+    values: [1.0e+1, 1.0e+3]
     num_samples: 10
     dtype: "float"
   encoder_weight_decay:
-    values: [1.0e-6, 1.0e+1]
+    values: [1.0e+1, 1.0e+3]
     num_samples: 10
     dtype: "float"
   lr: 
-    values: [1.0e-7, 1.0e-2]
+    values: [1.0e-7, 1.0e-3]
     num_samples: 10
     dtype: "float"
   encoder_lr: 
-    values: [1.0e-8, 1.0e-4]
+    values: [1.0e-9, 3.0e-5]
     num_samples: 10
     dtype: "float"
   dropout:
     values: [0.0, 0.2]
     num_samples: 10
     dtype: "float"
-  mlp_hidden_dim: 
-    values: [2048, 4096]
-    dtype: "int"
-  num_xformer_layers: 
-    values: [1, 2, 3, 4, 5, 6]
-    dtype: "int"

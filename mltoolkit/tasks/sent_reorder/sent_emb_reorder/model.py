@@ -39,6 +39,7 @@ class SentEmbedReorder(nn.Module):
             activation=activation,
             dropout=dropout,
             batch_first=True,
+            norm_first=True,
         )
         self.encoder = nn.TransformerEncoder(
             encoder_layer,
@@ -49,7 +50,12 @@ class SentEmbedReorder(nn.Module):
         if with_positions:
             self.positions = nn.Parameter(torch.randn(seq_len, d_model))
 
-        module_list = [nn.Linear(d_model, mlp_hidden_dim), nn.ReLU()]
+        module_list = [
+            nn.Linear(d_model, mlp_hidden_dim), 
+            nn.LayerNorm(mlp_hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout)
+        ]
         module_list += (num_mlp_layers-1)*[
             nn.Linear(mlp_hidden_dim, mlp_hidden_dim), 
             nn.LayerNorm(mlp_hidden_dim),
@@ -70,7 +76,7 @@ class SentEmbedReorder(nn.Module):
                 )
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias)
-            elif isinstance(layer, nn.Embedding):
+            elif isinstance(layer, (nn.Embedding, nn.Parameter)):
                 nn.init.uniform_(layer.weight, -0.1, 0.1)
             elif isinstance(layer, nn.TransformerEncoderLayer):
                 for sublayer in layer.children():
