@@ -49,7 +49,7 @@ params:
   # data params
   num_proc: 10
   shuffle: True
-  batch_size: 16
+  batch_size: 24
   num_epochs: 40
   eval_freq: 2000
   log_freq: 50
@@ -66,21 +66,23 @@ search_params:
   search_steps: 240
   train_step_limit: null
   weight_decay:
-    values: [1.0e+1, 1.0e+3]
-    num_samples: 10
+    values: [1.0e-6, 1.0e+1]
     dtype: "float"
+    scale: "log"
   encoder_weight_decay:
-    values: [1.0e+1, 1.0e+3]
-    num_samples: 10
+    values: [1.0e-6, 1.0e+1]
     dtype: "float"
+    scale: "log"
   lr: 
     values: [1.0e-7, 1.0e-3]
     num_samples: 10
     dtype: "float"
+    scale: "log"
   encoder_lr: 
     values: [1.0e-9, 3.0e-5]
     num_samples: 10
     dtype: "float"
+    scale: "log"
   dropout:
     values: [0.0, 0.2]
     num_samples: 10

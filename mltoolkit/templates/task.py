@@ -12,6 +12,7 @@ from tqdm import tqdm
 from copy import deepcopy
 from accelerate import Accelerator
 from accelerate.state import AcceleratorState
+from accelerate.utils import DistributedDataParallelKwargs
 from datasets import Dataset
 
 # local imports
@@ -68,22 +69,23 @@ class Task:
         for param, param_dict in search_params.items():
             dtype = param_dict['dtype']
             values = param_dict['values']
+            scale = param_dict.get('scale', 'linear')
             if 'num_samples' in param_dict:
+                start, stop = values[0], values[-1]
+                if scale == 'log':
+                    start = np.log10(start)
+                    stop = np.log10(stop)
+
                 if dtype == 'float':
-                    samples = np.random.uniform(
-                        values[0],
-                        values[-1],
-                        (steps,)
-                    )
+                    samples = np.random.uniform(start, stop, (steps,))
                 elif dtype == 'int':
-                    samples = np.random.randint(
-                        values[0],
-                        values[-1],
-                        (steps,)
-                    )
+                    samples = np.random.randint(start, stop, (steps,))
                 else:
                     display.error(f'dtype "{dtype}" is not valid')
                     raise ValueError()
+                
+                if scale == 'log':
+                    samples = (10**samples).astype(dtype)
             else:
                 samples = np.random.choice(values, (steps,))
             search_space[param] = samples.tolist()
@@ -122,7 +124,12 @@ class Task:
 
     #def _grid_search(self):
     def param_search(self):
-        accel = Accelerator()
+        kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+        try:
+            accel = Accelerator(kwargs_handlers=[kwargs])
+        except Exception as e:
+            accel = Accelerator()
+
         cfg = self.cfg
 
         search_params = deepcopy(cfg.search_params)

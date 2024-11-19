@@ -36,16 +36,6 @@ def get_dataloaders(cfg):
         sents = [sent.strip() for sent in sents]
         return {'sentences': sents}
     sind = sind.with_transform(sind_xform)
-    """
-    sind = sind.map(
-        lambda x: {
-            'text': re.sub(
-                '\s*[^\w\s]?\s*<eos\>\s*[^\w\s]?\s*', 
-                '. ', x['text']
-            )
-        }
-    )
-    """
 
     # load in ROCstories and randomly create splits
     base_path = f'{files.project_root()}/data/ROCStories/'
