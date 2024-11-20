@@ -7,7 +7,7 @@ import numpy as np
 import random
 from nltk import sent_tokenize
 from torch.utils.data import DataLoader
-from datasets import DatasetDict, Dataset
+from datasets import DatasetDict, Dataset, concatenate_datasets
 import pandas as pd
 import re
 
@@ -20,22 +20,20 @@ def get_dataloaders(cfg):
     """
     seed = cfg.general['seed']
 
-    # load in SIND
     sind_base = f'{files.project_root()}/data/sind'
     sind_files = {
-        'train': f'{sind_base}/train.txt',
-        'validation': f'{sind_base}/dev.txt',
-        'test': f'{sind_base}/test.txt',
+        'train': f'{sind_base}/train.tsv',
+        'validation': f'{sind_base}/dev.tsv',
+        'test': f'{sind_base}/test.tsv',
     }
     sind = datasets.load_dataset(
-        sind_base, data_files=sind_files,
-        cache_dir=cfg.paths['cache'],
+        'text', data_files=sind_files,
     )
     def sind_xform(sample):
-        sents = [text.split('<eos>') for text in sample['text']]
+        sents = sample['text'].split('<eos>')
         sents = [sent.strip() for sent in sents]
         return {'sentences': sents}
-    sind = sind.with_transform(sind_xform)
+    sind = sind.map(sind_xform).select_columns('sentences')
 
     # load in ROCstories and randomly create splits
     base_path = f'{files.project_root()}/data/ROCStories/'
@@ -53,7 +51,7 @@ def get_dataloaders(cfg):
         'validation': test_val['train'],
         'test': test_val['test'],
     })
-    roc = roc.with_transform(roc_xform)
+    roc = roc.map(roc_xform).select_columns('sentences')
 
     # load in CNN/DailyMail
     cnndm = datasets.load_dataset(
@@ -75,18 +73,30 @@ def get_dataloaders(cfg):
     wiki = wiki.select_columns('text')
 
     # combine data
-    train_data = datasets.concatenate_datasets((
-        roc['train'],
-        cnndm['train'],
-        wiki['train'],
-    ))
+    parts = {
+        'roc': roc,
+        'sind': sind,
+    }
+    ds = {}
+    for split in ['train', 'test', 'validation']:
+        ds[split] = concatenate_datasets([
+            parts[ds_name][split]
+            for ds_name in cfg.params.get('datasets', ['roc'])
+        ])
+    """
+    ds = DatasetDict({
+        split: concatenate_datasets([roc[split], sind[split]])
+        for split in ['train', 'test', 'validation']
+    })
+    ds['train'] = roc['train']
+    """
 
     seed = cfg.general.get('seed') or random.randint(0, 2**64)
     seed_worker, g = tensor_utils.get_dl_params(seed)
 
     train_loader = DataLoader(
         #train_data,
-        roc['train'],
+        ds['train'],
         batch_size=cfg.params['batch_size'],
         num_workers=cfg.params['num_proc'],
         shuffle=True,
@@ -95,7 +105,7 @@ def get_dataloaders(cfg):
     )
 
     val_loader = DataLoader(
-        roc['test'],
+        ds['test'],
         batch_size=cfg.params['batch_size'],
         num_workers=cfg.params['num_proc'],
         shuffle=True,
