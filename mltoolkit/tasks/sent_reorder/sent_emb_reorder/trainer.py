@@ -126,6 +126,7 @@ class TrainerSentEmbedReordering(Trainer):
         sent_batch = [
             sents[:seq_len] for sents in batch['sentences']
         ]
+
         #sent_batch = [text.split('<eos>') for text in batch['text']]
         N = len(sent_batch)
 
@@ -192,13 +193,8 @@ class TrainerSentEmbedReordering(Trainer):
 
         # compute scores
         scores = self.train_vars['reorder'](
-            shuffled_embs, 
-            embed_pad_mask
+            shuffled_embs, embed_pad_mask
         )
-
-        # set labels
-        labels = Y.clone().detach().to(torch.float32).to(scores.device)
-        labels = labels[label_mask]
 
         # compute loss
         loss = self.loss_fn(
