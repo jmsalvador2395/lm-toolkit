@@ -72,12 +72,14 @@ class TrainerTransformerAE(Trainer):
 
     def step(self, batch: T, mode='train'):
 
-        tokens = self.tokenizer(batch['text'],
-                                truncation=True,
-                                max_length=self.cfg.params['seq_len']+1,
-                                return_token_type_ids=False,
-                                padding=True,
-                                return_tensors='pt').to(self.accel.device)
+        tokens = self.tokenizer(
+            batch['text'],
+            truncation=True,
+            max_length=self.cfg.params['seq_len']+1,
+            return_token_type_ids=False,
+            padding=True,
+            return_tensors='pt'
+        ).to(self.accel.device)
 
         input_ids = tokens['input_ids'].detach().clone()
         attention_mask = tokens['attention_mask'].detach().clone()

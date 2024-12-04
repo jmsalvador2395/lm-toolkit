@@ -98,3 +98,89 @@ class SentEmbedReorder(nn.Module):
         scores = self.mlp(scores)
         scores = scores.squeeze(-1)
         return scores
+
+
+class SentEmbedReorderCls(nn.Module):
+    
+    def __init__(
+            self, 
+            n_class=5,
+            d_model=1024,
+            nhead=12,
+            dim_feedforward=2048,
+            activation='gelu',
+            dropout=0.1,
+            num_xformer_layers=1,
+            mlp_hidden_dim=2048,
+            num_mlp_layers=2,
+            with_positions=True,
+            seq_len=128,
+            **kwargs):
+
+        super(SentEmbedReorderCls, self).__init__()
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
+            activation=activation,
+            dropout=dropout,
+            batch_first=True,
+            norm_first=True,
+        )
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer,
+            num_layers=num_xformer_layers,
+        )
+
+        self.with_positions = with_positions
+        if with_positions:
+            self.positions = nn.Parameter(torch.randn(seq_len, d_model))
+
+        module_list = [
+            nn.Linear(d_model, mlp_hidden_dim), 
+            nn.LayerNorm(mlp_hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout)
+        ]
+        module_list += (num_mlp_layers-1)*[
+            nn.Linear(mlp_hidden_dim, mlp_hidden_dim), 
+            nn.LayerNorm(mlp_hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout)
+        ]
+        module_list.append(nn.Linear(mlp_hidden_dim, n_class))
+
+        self.mlp = nn.Sequential(*module_list)
+
+        self._init_weights()
+
+    def _init_weights(self):
+        for layer in self.modules():
+            if isinstance(layer, nn.Linear):
+                nn.init.kaiming_uniform_(
+                    layer.weight, nonlinearity='relu'
+                )
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias)
+            elif isinstance(layer, (nn.Embedding, nn.Parameter)):
+                nn.init.uniform_(layer.weight, -0.1, 0.1)
+            elif isinstance(layer, nn.TransformerEncoderLayer):
+                for sublayer in layer.children():
+                    if isinstance(sublayer, nn.Linear):
+                        nn.init.kaiming_uniform_(
+                            sublayer.weight, nonlinearity='relu'
+                        )
+                        if sublayer.bias is not None:
+                            nn.init.zeros_(sublayer.bias)
+                    elif isinstance(sublayer, nn.LayerNorm):
+                        nn.init.ones_(sublayer.weight)
+                        nn.init.zeros_(sublayer.bias)
+
+    def forward(self, X, mask):
+        N, L, D = X.shape
+        if self.with_positions:
+            X += self.positions[None, :L]
+        scores = self.encoder(X, src_key_padding_mask=mask)
+        scores = self.mlp(scores)
+        return scores

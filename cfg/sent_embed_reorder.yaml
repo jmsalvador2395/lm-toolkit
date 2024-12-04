@@ -19,16 +19,23 @@ params:
   freeze_encoder: False
   d_model: 1024
   nhead: 16
-  dim_feedforward: 4096
+  #dim_feedforward: 4096
+  dim_feedforward: 1024
   dropout: 0.1
   activation: 'relu'
   sent_len: 128
   seq_len: 128
   with_positions: True
-  num_xformer_layers: 2
-  mlp_hidden_dim: 4096
+  num_xformer_layers: 6
+  #mlp_hidden_dim: 4096
+  mlp_hidden_dim: 1024
   num_mlp_layers: 1
-  loss_fn: "huber"
+  loss_fn: "hinge"
+  loss_args:
+    margin: 5
+    scale: 5
+    alpha: .6283707401
+  method: 'regression'
 
   dtype: "float32"
 
@@ -41,7 +48,6 @@ params:
   beta2: .999
   eps: 1.0e-8
   clip_max_norm: 10
-  alpha: .6283707401
 
   # optimizer scheduler
   sched_step_size: 5
@@ -51,7 +57,7 @@ params:
   num_proc: 10
   shuffle: True
   batch_size: 32
-  num_epochs: 40
+  num_epochs: 15
   eval_freq: 1000
   log_freq: 50
   num_test_samples: 25

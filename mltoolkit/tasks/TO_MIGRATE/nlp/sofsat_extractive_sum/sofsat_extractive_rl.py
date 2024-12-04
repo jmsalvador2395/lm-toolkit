@@ -70,7 +70,8 @@ class TrainerSofsatExtractiveRL(TrainerBase):
                 cfg.optim.get('beta2', .999)
             ),
             eps=float(cfg.optim.get('eps', 1e-8)),
-            weight_decay=float(self.cfg.optim.get('weight_decay', 1e-4)),
+            weight_decay=float(
+                self.cfg.optim.get('weight_decay', 1e-4)),
         )
 
         # scheduler

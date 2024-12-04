@@ -21,14 +21,15 @@ from .upsample_modules import UpConv, UpLinear
 class TransformerAE(nn.Module):
     
     def __init__(self, 
-                 n_vocab,
-                 n_decoder_layers=6,
-                 dropout=0.1,
-                 freeze_encoder=True,
-                 pool_op='average',
-                 d_pool=None,
-                 upsampling_proc='linear',
-                 **kwargs):
+        n_vocab,
+        n_decoder_layers=6,
+        dropout=0.1,
+        freeze_encoder=True,
+        pool_op='average',
+        d_pool=None,
+        upsampling_proc='linear',
+        **kwargs
+    ):
 
         super(TransformerAE, self).__init__()
 

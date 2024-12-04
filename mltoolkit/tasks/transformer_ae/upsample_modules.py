@@ -39,7 +39,7 @@ class UpConv(nn.Module):
             ))
             if deconv_activation == 'relu':
                 modules.append(nn.ReLU())
-            elif deconv_actionation == 'gelu':
+            elif deconv_activation == 'gelu':
                 modules.append(nn.GELU())
 
         modules.append(nn.Linear(

@@ -2,8 +2,16 @@ import torch
 from torch import nn
 from torch import Tensor
 from torch.nn import functional as F
+from typing import Tuple
 
-def hinge_loss(scores, X, Y, mask, margin=1):
+def hinge_loss(
+    scores, 
+    X, 
+    Y, 
+    mask, 
+    margin=1, 
+    **kwargs
+) -> Tuple[Tensor, Tensor]:
     rows, cols = X.shape
     total = torch.sum(mask)
     reverse = torch.argsort(Y, dim=-1)
@@ -16,13 +24,20 @@ def hinge_loss(scores, X, Y, mask, margin=1):
         upper = unshuffled_scores[:, i+1:]
         msk = mask[:, i+1:]
 
-        losses = torch.max(zero, lower-upper+margin)
+        losses = torch.max(zero, margin+lower-upper)
         sum += torch.sum(losses[msk])
 
     loss = sum/total
-    return loss
+    return loss, torch.argsort(scores, dim=-1)
 
-def hinge_pair_loss(scores, X, Y, mask, margin=1):
+def hinge_pair_loss(
+    scores, 
+    X, 
+    Y, 
+    mask, 
+    margin=1, 
+    **kwargs
+) -> Tuple[Tensor, Tensor]:
 
     reverse = torch.argsort(Y, dim=-1)
     unshuff_scores = scores[X, reverse]
@@ -32,10 +47,10 @@ def hinge_pair_loss(scores, X, Y, mask, margin=1):
     loss = torch.max(zero, diffs+margin)
     loss = torch.mean(loss[mask[:, 1:]])
 
-    return loss
+    return loss, torch.argsort(scores, dim=-1)
 
 
-def cross_entropy_loss(scores, X, Y, mask):
+def cross_entropy_loss(scores, X, Y, mask, **kwargs):
 
     sc = scores.masked_fill(~mask, float('-inf'))
     smax = F.softmax(sc, dim=-1)
@@ -43,12 +58,12 @@ def cross_entropy_loss(scores, X, Y, mask):
     y_smax = torch.softmax(y, dim=-1)
     loss = torch.mean(-torch.log(y_smax[mask]*smax[mask]))
 
-    return loss
+    return loss, torch.argsort(scores, dim=-1)
 
-def huber_loss(scores, X, Y, mask):
+def huber_loss(scores, X, Y, mask, scale=1, **kwargs):
     fn = nn.HuberLoss()
-    loss = fn(scores[mask], Y.to(torch.float32)[mask])
-    return loss
+    loss = fn(scores[mask], scale*Y.to(torch.float32)[mask])
+    return loss, torch.argsort(scores, dim=-1)
 
 def pairwise_logistic_loss(scores, X, Y, mask):
 
@@ -69,7 +84,8 @@ def diff_kendall(
     Y: Tensor, 
     mask: Tensor,
     alpha: Tensor=.1,
-) -> Tensor:
+    **kwargs,
+) -> Tuple[Tensor, Tensor]:
     dev = scores.device
     rows, cols = scores.shape
     N_0 = torch.sum(mask, dim=-1)
@@ -87,5 +103,25 @@ def diff_kendall(
 
             sums += (frac1*frac2)*(mask[:, i]*mask[:, j])
     
-    return torch.mean((1/N_0)*sums)
+    return torch.mean((1/N_0)*sums), torch.argsort(scores, dim=-1)
 
+def exclusive(
+    scores: Tensor, 
+    X: Tensor, 
+    Y: Tensor, 
+    mask: Tensor,
+    alpha: Tensor=.1,
+    **kwargs,
+) -> Tuple[Tensor, Tensor]:
+
+    N = len(scores)
+    loss = torch.tensor(0.0, device=scores.device)
+    for score, y, msk in zip(scores, Y, mask):
+        n = torch.sum(msk)
+        sc = score[:n, :n]
+        op = torch.log_softmax(sc, dim=-1)
+        po = torch.log_softmax(sc.T, dim=-1)
+
+        loss += -torch.mean((op + po)[range(n), y])
+    loss /= N
+    return loss, torch.argmax(scores, dim=-1)

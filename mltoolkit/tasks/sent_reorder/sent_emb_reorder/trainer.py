@@ -27,11 +27,11 @@ from mltoolkit.utils import (
     strings,
     display,
 )
-from .model import SentEmbedReorder
+from .model import SentEmbedReorder, SentEmbedReorderCls
 from .data_module import get_dataloaders
 from .loss_functions import (
     hinge_loss, cross_entropy_loss, huber_loss,
-    diff_kendall, hinge_pair_loss,
+    diff_kendall, hinge_pair_loss, exclusive
 )
 
 class TrainerSentEmbedReordering(Trainer):
@@ -49,6 +49,7 @@ class TrainerSentEmbedReordering(Trainer):
 
         # define models
         model_name = cfg.params['encoder']
+        self.method = cfg.params.get('method', 'regression')
         self.model_name = model_name
         encoder = AutoModel.from_pretrained(
             model_name,
@@ -59,7 +60,15 @@ class TrainerSentEmbedReordering(Trainer):
         if cfg.params['freeze_encoder']:
             encoder.eval()
 
-        model = SentEmbedReorder(**cfg.params)
+        if self.method == 'regression':
+            model = SentEmbedReorder(**cfg.params)
+        elif self.method == 'classification':
+            model = SentEmbedReorderCls(**cfg.params)
+        else:
+            raise ValueError(
+                '`method` parameter should be either `regression or '
+                '`classification`.'
+            )
 
         tok = AutoTokenizer.from_pretrained(model_name)
 
@@ -101,6 +110,14 @@ class TrainerSentEmbedReordering(Trainer):
                 self.loss_fn = huber_loss
             case 'hinge_pair':
                 self.loss_fn = hinge_pair_loss
+            case 'exclusive':
+                self.loss_fn = exclusive
+            case _:
+                raise ValueError(
+                    'loss function should be one of: [`hinge`, '
+                    '`cross_entropy, `diff_kendall`, `huber`, '
+                    '`hinge_pair`, `exclusive`'
+                )
 
 
         return {
@@ -152,8 +169,12 @@ class TrainerSentEmbedReordering(Trainer):
                 sent_embeds = \
                     self.train_vars['encoder'](**tokens)
         else:
-            sent_embeds = \
-                self.train_vars['encoder'](**tokens)
+            try:
+                sent_embeds = \
+                    self.train_vars['encoder'](**tokens)
+            except Exception as e:
+                breakpoint()
+            
 
         if 'pooler_output' in sent_embeds.keys():
             sent_embeds = sent_embeds['pooler_output']
@@ -197,19 +218,20 @@ class TrainerSentEmbedReordering(Trainer):
         )
 
         # compute loss
-        loss = self.loss_fn(
+        loss, ordering = self.loss_fn(
             scores, X.to(scores.device),
             Y.to(scores.device), label_mask,
+            **self.cfg.params.get('loss_args')
         )
 
         # convert tensors to numpy
-        scores = scores.detach().cpu().numpy()
+        ordering = ordering.cpu().numpy()
         Y = Y.cpu().numpy()
         label_mask = label_mask.cpu().numpy()
 
         kendall = [
-            tuple(kendalltau(y[mask], score[mask]))
-            for y, score, mask in zip(Y, scores, label_mask)
+            tuple(kendalltau(y[mask], order[mask]))
+            for y, order, mask in zip(Y, ordering, label_mask)
         ]
         tau, p_tau = zip(*kendall)
         tau = np.mean(tau)
