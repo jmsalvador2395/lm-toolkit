@@ -55,6 +55,8 @@ class TrainerSentEmbedCtxReordering(Trainer):
             model_name,
             cache_dir=cfg.paths['cache'],
         )
+        if model_name == 'facebook/bart-large':
+            encoder = encoder.encoder
 
         # freeze encoder if specified
         if cfg.params['freeze_encoder']:
@@ -160,11 +162,15 @@ class TrainerSentEmbedCtxReordering(Trainer):
         
         # shuffle sentences
         sent_batch_shuf = [
-            np.array(sents)[y[:L]].tolist()
+            np.array(sents)[y[:l]].tolist()
             for sents, y, l in zip(sent_batch, Y, sent_lengths)
         ]
 
-        if self.cfg.params['encoder'] == 'facebook/bart-large':
+        cls_models = [
+            'facebook/bart-large', 'mixedbread-ai/mxbai-embed-large-v1',
+        ]
+
+        if self.cfg.params['encoder'] in cls_models:
             bos_tok = tok.cls_token
             eos_tok = tok.eos_token
             sent_batch_cat = [
@@ -184,7 +190,7 @@ class TrainerSentEmbedCtxReordering(Trainer):
                 return_tensors='pt'
         ).to(self.accel.device)
 
-        if self.cfg.params['encoder'] == 'facebook/bart-large':
+        if self.cfg.params['encoder'] in cls_models: 
             cls_ids = [
                 torch.where(ids == tok.cls_token_id)[0]
                 for ids in tokens['input_ids']
@@ -200,6 +206,7 @@ class TrainerSentEmbedCtxReordering(Trainer):
                 word_embeds = \
                     self.train_vars['encoder'](**tokens)
             except Exception as e:
+                print(f'Trigered Exception:\n{e}')
                 breakpoint()
         
         # group sentence embeddings by document
@@ -235,9 +242,15 @@ class TrainerSentEmbedCtxReordering(Trainer):
         ordering = ordering.cpu().numpy()
         label_mask = label_mask.cpu().numpy()
 
+        """
         kendall = [
             tuple(kendalltau(y[mask], order[mask]))
             for y, order, mask in zip(Y, ordering, label_mask)
+        ]
+        """
+        kendall = [
+            tuple(kendalltau(y[mask], score[mask].detach().cpu().numpy()))
+            for y, score, mask in zip(Y, scores, label_mask)
         ]
         tau, p_tau = zip(*kendall)
         tau = np.mean(tau)

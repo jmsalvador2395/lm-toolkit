@@ -103,7 +103,7 @@ def diff_kendall(
 
             sums += (frac1*frac2)*(mask[:, i]*mask[:, j])
     
-    return torch.mean((1/N_0)*sums), torch.argsort(scores, dim=-1)
+    return -torch.mean((1/N_0)*sums), torch.argsort(scores, dim=-1)
 
 def exclusive(
     scores: Tensor, 

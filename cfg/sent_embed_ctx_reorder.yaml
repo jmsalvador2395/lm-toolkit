@@ -10,27 +10,27 @@ general:
 
 params:
   save_criterion: "max"
-  save_checkpoint: True
+  save_checkpoint: False
   patience: 2
 
   # model params
-  #encoder: "mixedbread-ai/mxbai-embed-large-v1"
-  encoder: "facebook/bart-large"
+  encoder: "mixedbread-ai/mxbai-embed-large-v1"
+  #encoder: "facebook/bart-large"
   freeze_encoder: False
   d_model: 1024
   nhead: 16
-  #dim_feedforward: 4096
-  dim_feedforward: 1024
+  dim_feedforward: 4096
+  #dim_feedforward: 1024
   dropout: 0.1
   activation: 'relu'
   sent_len: 128
   seq_len: 512
   with_positions: True
   num_xformer_layers: 2
-  #mlp_hidden_dim: 4096
-  mlp_hidden_dim: 1024
+  mlp_hidden_dim: 4096
+  #mlp_hidden_dim: 1024
   num_mlp_layers: 1
-  loss_fn: "hinge"
+  loss_fn: "diff_kendall"
   loss_args:
     margin: 5
     scale: 5
@@ -40,14 +40,14 @@ params:
   dtype: "float32"
 
   # optimizer params
-  lr: 0.00045302348118528724
-  encoder_lr: 1.0e-5
-  weight_decay: 1.0e-6
+  lr: 0.0005184167560465039
+  encoder_lr: 2.231137128105999e-05
+  weight_decay: 10.0
   encoder_weight_decay: 1.0e-6
   beta1: .9
   beta2: .999
   eps: 1.0e-8
-  clip_max_norm: 10
+  clip_max_norm: 1
 
   # optimizer scheduler
   sched_step_size: 5
@@ -56,10 +56,10 @@ params:
   # data params
   num_proc: 10
   shuffle: True
-  batch_size: 32
+  batch_size: 96
   num_epochs: 15
-  eval_freq: 100
-  log_freq: 25
+  eval_freq: 300
+  log_freq: 50
   num_test_samples: 25
   dataset: "roc"
 
@@ -82,12 +82,12 @@ search_params:
     dtype: "float"
     scale: "log"
   lr: 
-    values: [1.0e-7, 1.0e-2]
+    values: [1.0e-6, 1.0e-2]
     num_samples: 10
     dtype: "float"
     scale: "log"
   encoder_lr: 
-    values: [1.0e-9, 3.0e-5]
+    values: [1.0e-6, 1.0e-4]
     num_samples: 10
     dtype: "float"
     scale: "log"
