@@ -1,0 +1,93 @@
+paths:
+  logdir_base: "{{project_root}}/tensorboard"
+  cache: "/data/john/cache"
+  results: "{{project_root}}/results"
+  
+general: 
+  task: "sent_emb_ctx_reorder"
+  seed: null
+  note: "a quick note about this training run. this note will show up in tensorboard."
+
+params:
+  save_criterion: "max"
+  save_checkpoint: True
+  patience: 2
+
+  # model params
+  #encoder: "mixedbread-ai/mxbai-embed-large-v1"
+  encoder: "facebook/bart-large"
+  freeze_encoder: False
+  d_model: 1024
+  nhead: 16
+  #dim_feedforward: 4096
+  dim_feedforward: 1024
+  dropout: 0.1
+  activation: 'relu'
+  sent_len: 128
+  seq_len: 512
+  with_positions: True
+  num_xformer_layers: 2
+  #mlp_hidden_dim: 4096
+  mlp_hidden_dim: 1024
+  num_mlp_layers: 1
+  loss_fn: "hinge"
+  loss_args:
+    margin: 5
+    scale: 5
+    alpha: .6283707401
+  method: 'regression'
+
+  dtype: "float32"
+
+  # optimizer params
+  lr: 0.00045302348118528724
+  encoder_lr: 1.0e-5
+  weight_decay: 1.0e-6
+  encoder_weight_decay: 1.0e-6
+  beta1: .9
+  beta2: .999
+  eps: 1.0e-8
+  clip_max_norm: 10
+
+  # optimizer scheduler
+  sched_step_size: 5
+  sched_gamma: 0.998
+
+  # data params
+  num_proc: 10
+  shuffle: True
+  batch_size: 32
+  num_epochs: 15
+  eval_freq: 100
+  log_freq: 25
+  num_test_samples: 25
+  dataset: "roc"
+
+  # misc options
+  skip_first_eval: True
+
+# Used for hyperparameter search.
+# For each parameter, if "num_samples" isn't specified, 
+# only the values specificed in the "values" argument will be used
+search_params:
+  search_type: 'random'
+  search_steps: 240
+  train_step_limit: null
+  weight_decay:
+    values: [1.0e-6, 1.0e+1]
+    dtype: "float"
+    scale: "log"
+  encoder_weight_decay:
+    values: [1.0e-6, 1.0e+1]
+    dtype: "float"
+    scale: "log"
+  lr: 
+    values: [1.0e-7, 1.0e-2]
+    num_samples: 10
+    dtype: "float"
+    scale: "log"
+  encoder_lr: 
+    values: [1.0e-9, 3.0e-5]
+    num_samples: 10
+    dtype: "float"
+    scale: "log"

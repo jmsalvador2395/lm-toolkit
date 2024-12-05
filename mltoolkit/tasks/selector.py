@@ -9,7 +9,7 @@ from .vit_cls import TaskVitCls
 from .sofsat import TaskSofsatLora
 from .sent_reorder import (
     TaskSentEmbedReordering,
-    TaskSentEmbedReordering5,
+    TaskSentEmbedCtxReordering,
 )
 from mltoolkit.utils import display
 
@@ -35,7 +35,7 @@ def select_task(cfg, keywords, debug):
         'vit_cls': TaskVitCls,
         'sofsat/lora': TaskSofsatLora,
         'sent_emb_reorder': TaskSentEmbedReordering,
-        'sent_emb_reorder_5': TaskSentEmbedReordering5,
+        'sent_emb_ctx_reorder': TaskSentEmbedCtxReordering,
     }
 
     # Retrieve and execute task
