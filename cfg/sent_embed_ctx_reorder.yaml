@@ -14,8 +14,8 @@ params:
   patience: 2
 
   # model params
-  encoder: "mixedbread-ai/mxbai-embed-large-v1"
-  #encoder: "facebook/bart-large"
+  #encoder: "mixedbread-ai/mxbai-embed-large-v1"
+  encoder: "facebook/bart-large"
   freeze_encoder: False
   d_model: 1024
   nhead: 16
@@ -26,11 +26,11 @@ params:
   sent_len: 128
   seq_len: 512
   with_positions: True
-  num_xformer_layers: 2
+  num_xformer_layers: 4
   mlp_hidden_dim: 4096
   #mlp_hidden_dim: 1024
   num_mlp_layers: 1
-  loss_fn: "diff_kendall"
+  loss_fn: "hinge_pair"
   loss_args:
     margin: 5
     scale: 5
@@ -42,7 +42,7 @@ params:
   # optimizer params
   lr: 0.0005184167560465039
   encoder_lr: 2.231137128105999e-05
-  weight_decay: 10.0
+  weight_decay: 1.0e-6
   encoder_weight_decay: 1.0e-6
   beta1: .9
   beta2: .999
@@ -74,15 +74,15 @@ search_params:
   search_steps: 240
   train_step_limit: null
   weight_decay:
-    values: [1.0e-6, 1.0e+1]
+    values: [1.0e-6, 1.0e+2]
     dtype: "float"
     scale: "log"
   encoder_weight_decay:
-    values: [1.0e-6, 1.0e+1]
+    values: [1.0e-6, 1.0e+2]
     dtype: "float"
     scale: "log"
   lr: 
-    values: [1.0e-6, 1.0e-2]
+    values: [1.0e-6, 1.0e-3]
     num_samples: 10
     dtype: "float"
     scale: "log"
