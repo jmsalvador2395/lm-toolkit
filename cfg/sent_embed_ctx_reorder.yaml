@@ -6,7 +6,7 @@ paths:
 general: 
   task: "sent_emb_ctx_reorder"
   seed: null
-  note: "a quick note about this training run. this note will show up in tensorboard."
+  note: "Without MLP last layer"
 
 params:
   save_criterion: "max"
@@ -19,29 +19,29 @@ params:
   freeze_encoder: False
   d_model: 1024
   nhead: 16
-  dim_feedforward: 4096
+  dim_feedforward: 1024
   #dim_feedforward: 1024
   dropout: 0.1
-  activation: 'relu'
+  activation: 'gelu'
   sent_len: 128
   seq_len: 512
   with_positions: True
-  num_xformer_layers: 4
+  num_xformer_layers: 1
   mlp_hidden_dim: 4096
   #mlp_hidden_dim: 1024
-  num_mlp_layers: 1
-  loss_fn: "hinge_pair"
-  loss_args:
-    margin: 5
-    scale: 5
-    alpha: .6283707401
+  num_mlp_layers: 0
   method: 'regression'
-
   dtype: "float32"
 
+  # loss args
+  loss_fn: "hinge_pair"
+  margin: 5
+  scale: 5
+  alpha: .6283707401
+
   # optimizer params
-  lr: 0.0005184167560465039
-  encoder_lr: 2.231137128105999e-05
+  lr: 1.7370388368850602e-06
+  encoder_lr: 2.8301354960834736e-06
   weight_decay: 1.0e-6
   encoder_weight_decay: 1.0e-6
   beta1: .9
@@ -51,7 +51,7 @@ params:
 
   # optimizer scheduler
   sched_step_size: 5
-  sched_gamma: 0.998
+  sched_gamma: 0.95
 
   # data params
   num_proc: 10
@@ -61,7 +61,7 @@ params:
   eval_freq: 300
   log_freq: 50
   num_test_samples: 25
-  dataset: "roc"
+  dataset: "all"
 
   # misc options
   skip_first_eval: True
@@ -91,3 +91,15 @@ search_params:
     num_samples: 10
     dtype: "float"
     scale: "log"
+  # num_xformer_layers:
+  #   values: [1, 4, 8]
+  #   dtype: "int"
+  # dim_feed_forward:
+  #   values: [1024, 4096, 8192]
+  #   dtype: "int"
+  margin:
+    values: [1, 3, 5]
+    dtype: "float"
+  batch_size:
+    values: [32, 64, 96]
+    dtype: "int"

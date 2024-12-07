@@ -124,11 +124,14 @@ class Task:
 
     #def _grid_search(self):
     def param_search(self):
+        """
         kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         try:
             accel = Accelerator(kwargs_handlers=[kwargs])
         except Exception as e:
             accel = Accelerator()
+        """
+        accel = Accelerator()
 
         cfg = self.cfg
 

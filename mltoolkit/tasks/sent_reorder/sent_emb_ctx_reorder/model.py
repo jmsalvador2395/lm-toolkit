@@ -50,21 +50,29 @@ class SentEmbedReorder(nn.Module):
         if with_positions:
             self.positions = nn.Parameter(torch.randn(seq_len, d_model))
 
-        module_list = [
-            nn.Linear(d_model, mlp_hidden_dim), 
-            nn.LayerNorm(mlp_hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(dropout)
-        ]
-        module_list += (num_mlp_layers-1)*[
-            nn.Linear(mlp_hidden_dim, mlp_hidden_dim), 
-            nn.LayerNorm(mlp_hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(dropout)
-        ]
-        module_list.append(nn.Linear(mlp_hidden_dim, 1))
+        act_fn = {
+            'gelu': nn.GELU,
+            'relu': nn.ReLU,
+        }
 
-        self.mlp = nn.Sequential(*module_list)
+        if num_mlp_layers > 0:
+            module_list = [
+                nn.Linear(d_model, mlp_hidden_dim), 
+                nn.LayerNorm(mlp_hidden_dim),
+                act_fn[activation](),
+                nn.Dropout(dropout)
+            ]
+            module_list += (num_mlp_layers-1)*[
+                nn.Linear(mlp_hidden_dim, mlp_hidden_dim), 
+                nn.LayerNorm(mlp_hidden_dim),
+                act_fn[activation](),
+                nn.Dropout(dropout)
+            ]
+            module_list.append(nn.Linear(mlp_hidden_dim, 1))
+
+            self.output = nn.Sequential(*module_list)
+        else:
+            self.output = nn.Linear(d_model, 1)
 
         self._init_weights()
 
@@ -95,7 +103,7 @@ class SentEmbedReorder(nn.Module):
         if self.with_positions:
             X += self.positions[None, :L]
         scores = self.encoder(X, src_key_padding_mask=mask)
-        scores = self.mlp(scores)
+        scores = self.output(scores)
         scores = scores.squeeze(-1)
         return scores
 
@@ -151,7 +159,7 @@ class SentEmbedReorderCls(nn.Module):
         ]
         module_list.append(nn.Linear(mlp_hidden_dim, n_class))
 
-        self.mlp = nn.Sequential(*module_list)
+        self.output= nn.Sequential(*module_list)
 
         self._init_weights()
 
@@ -182,5 +190,5 @@ class SentEmbedReorderCls(nn.Module):
         if self.with_positions:
             X += self.positions[None, :L]
         scores = self.encoder(X, src_key_padding_mask=mask)
-        scores = self.mlp(scores)
+        scores = self.output(scores)
         return scores

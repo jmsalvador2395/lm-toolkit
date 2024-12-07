@@ -120,7 +120,11 @@ class TrainerSentEmbedCtxReordering(Trainer):
                     '`cross_entropy, `diff_kendall`, `huber`, '
                     '`hinge_pair`, `exclusive`'
                 )
-
+        self.loss_args = {
+            'margin': cfg.params.get('margin', 1),
+            'scale': cfg.params.get('scale', 1),
+            'alpha': cfg.params.get('alpha', 1),
+        }
 
         return {
             'reorder': model,
@@ -234,8 +238,7 @@ class TrainerSentEmbedCtxReordering(Trainer):
 
         # compute loss
         loss, ordering = self.loss_fn(
-            scores, Xpt, Ypt, label_mask,
-            **self.cfg.params.get('loss_args')
+            scores, Xpt, Ypt, label_mask, **self.loss_args,
         )
 
         # convert tensors to numpy

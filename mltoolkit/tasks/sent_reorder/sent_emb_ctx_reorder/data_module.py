@@ -103,8 +103,8 @@ def get_dataloaders(cfg):
             parts = {
                 'roc': load_roc(cfg, seed=seed),
                 'sind': load_sind(cfg, seed=seed),
-                'cnndm': load_cnndm(cfg, seed=seed),
-                'wiki': load_wiki(cfg, seed=seed),
+                #'cnndm': load_cnndm(cfg, seed=seed),
+                #'wiki': load_wiki(cfg, seed=seed),
             }
             ag = {}
             for split in ['train', 'test', 'validation']:
@@ -112,8 +112,10 @@ def get_dataloaders(cfg):
                     data[split]
                     for ds_name, data in parts.items()
                 ])
-            ag = DatasetDict(ag)
-            ds = ag
+            ds = DatasetDict(ag)
+
+            # TODO delete this
+            ds['test'] = parts['roc']['test']
 
         case 'roc':
             ds = load_roc(cfg, seed=seed)
