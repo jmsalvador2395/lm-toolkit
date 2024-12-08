@@ -28,7 +28,7 @@ def hinge_loss(
         sum += torch.sum(losses[msk])
 
     loss = sum/total
-    return loss, torch.argsort(scores, dim=-1)
+    return loss
 
 def hinge_pair_loss(
     scores, 
@@ -37,7 +37,7 @@ def hinge_pair_loss(
     mask, 
     margin=1, 
     **kwargs
-) -> Tuple[Tensor, Tensor]:
+) -> Tensor:
 
     reverse = torch.argsort(Y, dim=-1)
     unshuff_scores = scores[X, reverse]
@@ -45,9 +45,9 @@ def hinge_pair_loss(
 
     diffs = unshuff_scores[:, :-1] - unshuff_scores[:, 1:]
     loss = torch.max(zero, diffs+margin)
-    loss = torch.mean(loss[mask[:, 1:]])
+    loss = torch.mean(loss[mask[:, 1:]])/margin
 
-    return loss, torch.argsort(scores, dim=-1)
+    return loss
 
 
 def cross_entropy_loss(scores, X, Y, mask, **kwargs):
@@ -58,12 +58,12 @@ def cross_entropy_loss(scores, X, Y, mask, **kwargs):
     y_smax = torch.softmax(y, dim=-1)
     loss = torch.mean(-torch.log(y_smax[mask]*smax[mask]))
 
-    return loss, torch.argsort(scores, dim=-1)
+    return loss
 
 def huber_loss(scores, X, Y, mask, scale=1, **kwargs):
     fn = nn.HuberLoss()
     loss = fn(scores[mask], scale*Y.to(torch.float32)[mask])
-    return loss, torch.argsort(scores, dim=-1)
+    return loss
 
 def pairwise_logistic_loss(scores, X, Y, mask):
 
@@ -85,7 +85,7 @@ def diff_kendall(
     mask: Tensor,
     alpha: Tensor=.1,
     **kwargs,
-) -> Tuple[Tensor, Tensor]:
+) -> Tensor:
     dev = scores.device
     rows, cols = scores.shape
     N_0 = torch.sum(mask, dim=-1)
@@ -103,7 +103,19 @@ def diff_kendall(
 
             sums += (frac1*frac2)*(mask[:, i]*mask[:, j])
     
-    return -torch.mean((1/N_0)*sums), torch.argsort(scores, dim=-1)
+    return -torch.mean((1/N_0)*sums)
+
+def hinge_pair_plus_diff_kendall(
+    scores: Tensor, 
+    X: Tensor, 
+    Y: Tensor, 
+    mask: Tensor,
+    weight=.5,
+    **kwargs,
+) -> Tensor:
+    term1 = hinge_pair_loss(scores, X, Y, mask, **kwargs)
+    term2 = diff_kendall(scores, X, Y, mask, **kwargs)
+    return weight*term1 + (1-weight)*term2
 
 def exclusive(
     scores: Tensor, 

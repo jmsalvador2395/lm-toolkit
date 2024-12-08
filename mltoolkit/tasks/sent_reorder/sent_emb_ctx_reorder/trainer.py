@@ -4,7 +4,6 @@ this is an example trainer class that inherits TrainerBase
 # external imports
 import torch
 import numpy as np
-import itertools
 from torch import nn
 from torch.nn import functional as F
 from datasets import Dataset
@@ -13,6 +12,8 @@ from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import SentenceTransformer
 from nltk import sent_tokenize
 from torch import Tensor
+from itertools import chain
+import json
 
 # for typing
 from typing import Tuple, List, Dict, TypeVar
@@ -31,7 +32,8 @@ from .model import SentEmbedReorder, SentEmbedReorderCls
 from .data_module import get_dataloaders
 from .loss_functions import (
     hinge_loss, cross_entropy_loss, huber_loss,
-    diff_kendall, hinge_pair_loss, exclusive
+    diff_kendall, hinge_pair_loss, exclusive,
+    hinge_pair_plus_diff_kendall,
 )
 
 class TrainerSentEmbedCtxReordering(Trainer):
@@ -114,6 +116,8 @@ class TrainerSentEmbedCtxReordering(Trainer):
                 self.loss_fn = hinge_pair_loss
             case 'exclusive':
                 self.loss_fn = exclusive
+            case 'hinge_pair_plus_diff_kendall':
+                self.loss_fn = hinge_pair_plus_diff_kendall
             case _:
                 raise ValueError(
                     'loss function should be one of: [`hinge`, '
@@ -237,29 +241,24 @@ class TrainerSentEmbedCtxReordering(Trainer):
         label_mask = ~embed_pad_mask
 
         # compute loss
-        loss, ordering = self.loss_fn(
+        loss= self.loss_fn(
             scores, Xpt, Ypt, label_mask, **self.loss_args,
         )
 
         # convert tensors to numpy
-        ordering = ordering.cpu().numpy()
         label_mask = label_mask.cpu().numpy()
 
-        """
-        kendall = [
-            tuple(kendalltau(y[mask], order[mask]))
-            for y, order, mask in zip(Y, ordering, label_mask)
-        ]
-        """
-        kendall = [
-            tuple(kendalltau(y[mask], score[mask].detach().cpu().numpy()))
+        scores = scores.detach().cpu().numpy()
+        label_pred_pairs = [
+            (y[mask].tolist(), score[mask].tolist()) 
             for y, score, mask in zip(Y, scores, label_mask)
         ]
+        kendall = [kendalltau(*pair) for pair in label_pred_pairs]
         tau, p_tau = zip(*kendall)
         tau = np.mean(tau)
         p_tau = np.mean(p_tau)
 
-        return loss, tau, p_tau
+        return loss, tau, p_tau, label_pred_pairs
 
     def train_step(self, batch: T) -> Tuple[torch.Tensor, Dict]:
         """
@@ -278,7 +277,7 @@ class TrainerSentEmbedCtxReordering(Trainer):
                 the currently supported keyword trackers
         """
 
-        loss, tau, p_tau = self.step(batch, mode='train')
+        loss, tau, p_tau, pairs = self.step(batch, mode='train')
 
         return loss, {
             'scalar' : {
@@ -308,12 +307,13 @@ class TrainerSentEmbedCtxReordering(Trainer):
                 on_eval_end() for final aggregation
         """
 
-        loss, tau, p_tau, = self.step(batch, mode='val')
+        loss, tau, p_tau, pairs = self.step(batch, mode='val')
 
         return {
             'loss': float(loss),
             'tau': float(tau),
             'p_tau': float(p_tau),
+            'pairs': pairs,
         }
 
     def on_eval_end(self, metrics: List, mode: str):
@@ -336,11 +336,18 @@ class TrainerSentEmbedCtxReordering(Trainer):
         loss = np.mean(metrics_ds['loss'])
         tau = np.mean(metrics_ds['tau'])
         p_tau = np.mean(metrics_ds['p_tau'])
+        pairs = list(chain.from_iterable(metrics_ds['pairs']))
+
+        # save data
+        pth = f"{self.cfg.paths['results']}/{self.cfg.general['experiment_name']}"
+        files.create_path(pth)
+        with open(f'{pth}/step-{self.step_counter}.json', 'w') as f:
+            f.write(json.dumps(pairs, indent=4))
 
         return tau, {
             'scalar' : {
                 'loss' : loss,
                 'tau': tau,
                 'p_tau': p_tau,
-            }
+            },
         }
