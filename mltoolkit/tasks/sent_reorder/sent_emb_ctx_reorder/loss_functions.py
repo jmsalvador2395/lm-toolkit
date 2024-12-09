@@ -45,7 +45,10 @@ def hinge_pair_loss(
 
     diffs = unshuff_scores[:, :-1] - unshuff_scores[:, 1:]
     loss = torch.max(zero, diffs+margin)
-    loss = torch.mean(loss[mask[:, 1:]])/margin
+    loss = torch.mean(loss[mask[:, 1:]])
+
+    if margin >= 1:
+        loss/=margin
 
     # add center term to keep the mean of scores close to 0
     #center = torch.mean(scores*mask, dim=-1)

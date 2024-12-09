@@ -253,12 +253,37 @@ class TrainerSentEmbedCtxReordering(Trainer):
             (y[mask].tolist(), score[mask].tolist()) 
             for y, score, mask in zip(Y, scores, label_mask)
         ]
-        kendall = [kendalltau(*pair) for pair in label_pred_pairs]
-        tau, p_tau = zip(*kendall)
-        tau = np.mean(tau)
-        p_tau = np.mean(p_tau)
 
-        return loss, tau, p_tau, label_pred_pairs
+        # compute kendall-tau
+
+        def _compute_metrics(label_pred_pairs):
+
+            # compute kendall-tau
+            kendall = [kendalltau(*pair) for pair in label_pred_pairs]
+            tau, p_tau = zip(*kendall)
+            tau = np.mean(tau)
+            p_tau = np.mean(p_tau)
+
+            labels, orderings = zip(*[
+                (np.array(y), np.argsort(np.argsort(np.array(y_hat))))
+                for y, y_hat in label_pred_pairs
+            ])
+
+            # compute pmr and acc
+            lengths = np.array([len(y) for y in labels])
+            num_correct = np.array([
+                np.sum(y == y_hat) for y, y_hat 
+                in zip(labels, orderings)
+            ])
+            acc = np.sum(num_correct)/np.sum(lengths)
+            pmr = np.mean(num_correct == lengths)
+
+            return tau, p_tau, pmr, acc
+        # compute pmr
+        tau, p_tau, pmr, acc = _compute_metrics(label_pred_pairs)
+
+
+        return loss, tau, p_tau, pmr, acc, label_pred_pairs
 
     def train_step(self, batch: T) -> Tuple[torch.Tensor, Dict]:
         """
@@ -277,13 +302,15 @@ class TrainerSentEmbedCtxReordering(Trainer):
                 the currently supported keyword trackers
         """
 
-        loss, tau, p_tau, pairs = self.step(batch, mode='train')
+        loss, tau, p_tau, pmr, acc, _ = self.step(batch, mode='train')
 
         return loss, {
             'scalar' : {
                 'loss' : loss,
                 'tau': tau,
                 'p_tau': p_tau,
+                'pmr': pmr,
+                'acc': acc,
             }
         }
 
@@ -307,12 +334,15 @@ class TrainerSentEmbedCtxReordering(Trainer):
                 on_eval_end() for final aggregation
         """
 
-        loss, tau, p_tau, pairs = self.step(batch, mode='val')
+        loss, tau, p_tau, pmr, acc, pairs = \
+            self.step(batch, mode='val')
 
         return {
             'loss': float(loss),
             'tau': float(tau),
             'p_tau': float(p_tau),
+            'pmr': float(pmr),
+            'acc': float(acc),
             'pairs': pairs,
         }
 
@@ -336,6 +366,8 @@ class TrainerSentEmbedCtxReordering(Trainer):
         loss = np.mean(metrics_ds['loss'])
         tau = np.mean(metrics_ds['tau'])
         p_tau = np.mean(metrics_ds['p_tau'])
+        pmr = np.mean(metrics_ds['pmr'])
+        acc = np.mean(metrics_ds['acc'])
         pairs = list(chain.from_iterable(metrics_ds['pairs']))
 
         # save data
@@ -349,5 +381,7 @@ class TrainerSentEmbedCtxReordering(Trainer):
                 'loss' : loss,
                 'tau': tau,
                 'p_tau': p_tau,
+                'pmr': pmr,
+                'acc': acc,
             },
         }
