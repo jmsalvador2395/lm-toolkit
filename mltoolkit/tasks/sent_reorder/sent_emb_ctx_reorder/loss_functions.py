@@ -47,6 +47,11 @@ def hinge_pair_loss(
     loss = torch.max(zero, diffs+margin)
     loss = torch.mean(loss[mask[:, 1:]])/margin
 
+    # add center term to keep the mean of scores close to 0
+    #center = torch.mean(scores*mask, dim=-1)
+    #center_loss = nn.HuberLoss()(center, torch.ones_like(center))
+    #return loss+center_loss
+
     return loss
 
 
@@ -60,9 +65,17 @@ def cross_entropy_loss(scores, X, Y, mask, **kwargs):
 
     return loss
 
-def huber_loss(scores, X, Y, mask, scale=1, **kwargs):
+def huber_loss(scores, X, Y, mask, scale=1, zero_mean=True, **kwargs):
     fn = nn.HuberLoss()
-    loss = fn(scores[mask], scale*Y.to(torch.float32)[mask])
+    if zero_mean:
+        mean = (
+            torch.sum(Y*mask, dim=-1, keepdim=True)
+            / torch.sum(mask, dim=-1, keepdim=True)
+        )
+        loss = fn(scores[mask], scale*(Y.to(torch.float32)-mean)[mask])
+    else:
+        loss = fn(scores[mask], scale*Y.to(torch.float32)[mask])
+
     return loss
 
 def pairwise_logistic_loss(scores, X, Y, mask):

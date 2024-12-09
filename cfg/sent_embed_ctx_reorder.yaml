@@ -5,7 +5,7 @@ paths:
   
 general: 
   task: "sent_emb_ctx_reorder"
-  seed: null
+  seed: 899621375
   note: "linear output layer, batch_size=128, num_xformer_layers=4, hinge and kendall loss"
 
 params:
@@ -24,8 +24,8 @@ params:
   activation: 'gelu'
   sent_len: 128
   seq_len: 512
-  with_positions: True
-  num_xformer_layers: 4
+  with_positions: "learned"
+  num_xformer_layers: 6
   mlp_hidden_dim: 4096
   #mlp_hidden_dim: 1024
   num_mlp_layers: 1
@@ -33,11 +33,14 @@ params:
   dtype: "float32"
 
   # loss args
-  loss_fn: "hinge_pair_plus_diff_kendall"
-  margin: 5
-  scale: 5
+  loss_fn: "hinge_pair"
+  #loss_fn: "hinge_pair_plus_diff_kendall"
+  #loss_fn: "huber"
+  margin: 1
+  scale: 2
   alpha: .6283707401
   weight: .5
+  zero_mean: True
 
   # optimizer params
   lr: 1.7370388368850602e-06
@@ -61,7 +64,7 @@ params:
   eval_freq: 300
   log_freq: 50
   num_test_samples: 25
-  dataset: "roc"
+  dataset: "sind"
 
   # misc options
   skip_first_eval: True
@@ -97,6 +100,6 @@ search_params:
   # dim_feed_forward:
   #   values: [1024, 4096, 8192]
   #   dtype: "int"
-  margin:
-    values: [3, 5, 10]
-    dtype: "float"
+  # margin:
+  #   values: [3, 5, 10]
+  #   dtype: "float"

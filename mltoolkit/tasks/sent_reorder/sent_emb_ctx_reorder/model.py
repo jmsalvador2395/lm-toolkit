@@ -8,7 +8,7 @@ from torch.nn import functional as f
 from typing import List
 
 # local imports
-from mltoolkit.nn_modules import PositionalEncoding
+from mltoolkit.nn_modules import PositionalEncoding, LearnedEncoding
 from mltoolkit.utils import (
     display,
     tensor_utils
@@ -47,8 +47,20 @@ class SentEmbedReorder(nn.Module):
         )
 
         self.with_positions = with_positions
-        if with_positions:
-            self.positions = nn.Parameter(torch.randn(seq_len, d_model))
+        if with_positions == 'learned':
+            #self.positions = nn.Parameter(torch.randn(seq_len, d_model))
+            self.positions = LearnedEncoding(
+                d_model=d_model, dropout=dropout, seq_len=seq_len
+            )
+        elif with_positions == 'sinusoidal':
+            self.positions = PositionalEncoding(
+                d_model=d_model, dropout=dropout, seq_len=seq_len
+            )
+        elif with_positions is not None:
+            raise ValueError(
+                '`with_positions` should be either [`learned`, '
+                '`sinusoidal`, None]'
+            )
 
         act_fn = {
             'gelu': nn.GELU,
@@ -101,7 +113,8 @@ class SentEmbedReorder(nn.Module):
     def forward(self, X, mask):
         N, L, D = X.shape
         if self.with_positions:
-            X += self.positions[None, :L]
+            #X += self.positions[None, :L]
+            X = self.positions(X)
         scores = self.encoder(X, src_key_padding_mask=mask)
         scores = self.output(scores)
         scores = scores.squeeze(-1)

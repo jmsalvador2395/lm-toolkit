@@ -147,7 +147,6 @@ def get_dataloaders(cfg):
         batch_size=cfg.params['batch_size'],
         collate_fn=collate_fn,
         num_workers=cfg.params['num_proc'],
-        shuffle=True,
         worker_init_fn=seed_worker,
         generator=g,
     )
