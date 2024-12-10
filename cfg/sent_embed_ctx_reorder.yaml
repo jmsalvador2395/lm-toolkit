@@ -54,7 +54,7 @@ params:
   clip_max_norm: 1
 
   # optimizer scheduler
-  sched_step_size: 5
+  sched_step_size: 10
   sched_gamma: 0.95
 
   # data params

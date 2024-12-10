@@ -68,7 +68,8 @@ def get_metrics(data):
         pred = np.array(pred)
 
         tau[key] = np.array([
-            kendalltau(*pair).statistic for pair in zip(labels, scores)
+            kendalltau(*pair).statistic 
+            for pair in zip(labels, np.argsort(scores))
         ])
         eq = labels == pred
         acc[key] = np.mean(eq)

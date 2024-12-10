@@ -264,7 +264,10 @@ class TrainerSentEmbedCtxReordering(Trainer):
         def _compute_metrics(label_pred_pairs):
 
             # compute kendall-tau
-            kendall = [kendalltau(*pair) for pair in label_pred_pairs]
+            kendall = [
+                kendalltau(label, np.argsort(pred)) 
+                for label, pred in label_pred_pairs
+            ]
             tau, p_tau = zip(*kendall)
             tau = np.mean(tau)
             p_tau = np.mean(p_tau)
