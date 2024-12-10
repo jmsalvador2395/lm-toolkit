@@ -40,7 +40,7 @@ def masked_hinge_pair_loss(data, margin=1):
     loss = np.maximum(0, margin + or_scores[:, :-1] - or_scores[:, 1:])
 
     wrong_mask = (labels != preds)
-    wrong_mask = wrong_mask[X, reverse]
+    #wrong_mask = wrong_mask[X, reverse]
     left = np.cumsum(wrong_mask, axis=-1)
     right = np.fliplr(np.cumsum(np.fliplr(wrong_mask), axis=-1))
     wrong_mask = (left*right).astype(bool)
