@@ -33,7 +33,8 @@ from .data_module import get_dataloaders
 from .loss_functions import (
     hinge_loss, cross_entropy_loss, huber_loss,
     diff_kendall, hinge_pair_loss, exclusive,
-    hinge_pair_plus_diff_kendall,
+    hinge_pair_plus_diff_kendall, hinge_pair_plus_huber,
+    masked_hinge_pair_loss
 )
 
 class TrainerSentEmbedCtxReordering(Trainer):
@@ -118,6 +119,10 @@ class TrainerSentEmbedCtxReordering(Trainer):
                 self.loss_fn = exclusive
             case 'hinge_pair_plus_diff_kendall':
                 self.loss_fn = hinge_pair_plus_diff_kendall
+            case 'hinge_pair_plus_huber':
+                self.loss_fn = hinge_pair_plus_huber
+            case 'masked_hinge_pair':
+                self.loss_fn = masked_hinge_pair_loss
             case _:
                 raise ValueError(
                     'loss function should be one of: [`hinge`, '
@@ -242,7 +247,7 @@ class TrainerSentEmbedCtxReordering(Trainer):
 
         # compute loss
         loss= self.loss_fn(
-            scores, Xpt, Ypt, label_mask, **self.loss_args,
+            scores, Xpt, Ypt, label_mask, mode=mode, **self.loss_args,
         )
 
         # convert tensors to numpy
@@ -376,7 +381,7 @@ class TrainerSentEmbedCtxReordering(Trainer):
         with open(f'{pth}/step-{self.step_counter}.json', 'w') as f:
             f.write(json.dumps(pairs, indent=4))
 
-        return tau, {
+        return acc, {
             'scalar' : {
                 'loss' : loss,
                 'tau': tau,

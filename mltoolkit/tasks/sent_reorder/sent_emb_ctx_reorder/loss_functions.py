@@ -4,6 +4,19 @@ from torch import Tensor
 from torch.nn import functional as F
 from typing import Tuple
 
+def hinge_pair_plus_huber(
+    scores, 
+    X, 
+    Y, 
+    mask, 
+    margin=1, 
+    **kwargs
+) -> Tuple[Tensor, Tensor]:
+    l1 = hinge_pair_loss(scores, X, Y, mask, margin=0)
+    l2 = huber_loss(scores, X, Y, mask, **kwargs)
+
+    return l1 + l2
+
 def hinge_loss(
     scores, 
     X, 
@@ -36,6 +49,7 @@ def hinge_pair_loss(
     Y, 
     mask, 
     margin=1, 
+    mask_zeros=False,
     **kwargs
 ) -> Tensor:
 
@@ -45,15 +59,48 @@ def hinge_pair_loss(
 
     diffs = unshuff_scores[:, :-1] - unshuff_scores[:, 1:]
     loss = torch.max(zero, diffs+margin)
-    loss = torch.mean(loss[mask[:, 1:]])
 
-    if margin >= 1:
-        loss/=margin
+    #loss = torch.mean(loss[mask[:, 1:]])
+    loss = loss[mask[:, 1:]]
+    if mask_zeros and kwargs['mode'] == 'train':
+        loss = loss[loss > 0]
+    loss = torch.mean(loss)
 
     # add center term to keep the mean of scores close to 0
     #center = torch.mean(scores*mask, dim=-1)
     #center_loss = nn.HuberLoss()(center, torch.ones_like(center))
     #return loss+center_loss
+
+    return loss
+
+def masked_hinge_pair_loss(
+    scores, 
+    X, 
+    Y, 
+    mask, 
+    margin=1, 
+    **kwargs
+) -> Tensor:
+
+    reverse = torch.argsort(Y, dim=-1)
+    unshuff_scores = scores[X, reverse]
+    zero = torch.tensor(0.0, device=unshuff_scores.device)
+    preds = torch.argsort(torch.argsort(scores, dim=-1), dim=-1)
+
+    # use wrong_mask to train on wrong placements only
+    wrong_mask = (Y != preds)
+    wrong_mask = wrong_mask[X, reverse]
+
+    left = torch.cumsum(wrong_mask, dim=-1)
+    right = torch.fliplr(torch.cumsum(torch.fliplr(wrong_mask), dim=-1))
+    train_mask = (left*right).to(torch.bool)
+    train_mask = train_mask[:, :-1] & train_mask[:, 1:]
+    #train_mask = wrong_mask[:, :-1] | wrong_mask[:, 1:]
+
+    diffs = unshuff_scores[:, :-1] - unshuff_scores[:, 1:]
+    loss = torch.max(zero, diffs+margin)*train_mask
+
+    loss = torch.mean(loss[mask[:, 1:]])
 
     return loss
 
