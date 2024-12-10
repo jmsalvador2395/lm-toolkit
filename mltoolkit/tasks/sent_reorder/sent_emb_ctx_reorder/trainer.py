@@ -270,7 +270,7 @@ class TrainerSentEmbedCtxReordering(Trainer):
             p_tau = np.mean(p_tau)
 
             labels, orderings = zip(*[
-                (np.array(y), np.argsort(np.argsort(np.array(y_hat))))
+                (np.array(y), np.argsort(np.array(y_hat)))
                 for y, y_hat in label_pred_pairs
             ])
 

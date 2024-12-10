@@ -83,13 +83,14 @@ def masked_hinge_pair_loss(
 ) -> Tensor:
 
     reverse = torch.argsort(Y, dim=-1)
-    unshuff_scores = scores[X, reverse]
+    #unshuff_scores = scores[X, reverse]
+    unshuff_scores = scores[X, Y]
     zero = torch.tensor(0.0, device=unshuff_scores.device)
-    preds = torch.argsort(torch.argsort(scores, dim=-1), dim=-1)
+    preds = torch.argsort(scores, dim=-1)
 
     # use wrong_mask to train on wrong placements only
     wrong_mask = (Y != preds)
-    wrong_mask = wrong_mask[X, reverse]
+    #wrong_mask = wrong_mask[X, reverse]
 
     left = torch.cumsum(wrong_mask, dim=-1)
     right = torch.fliplr(torch.cumsum(torch.fliplr(wrong_mask), dim=-1))
