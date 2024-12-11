@@ -103,8 +103,39 @@ def masked_hinge_pair_loss(
 
     loss = torch.mean(loss[mask[:, 1:]])
 
-    return loss
+ 
+def masked_hinge_loss(
+    scores, 
+    X, 
+    Y, 
+    mask, 
+    margin=1, 
+    **kwargs
+) -> Tuple[Tensor, Tensor]:
+    rows, cols = X.shape
+    total = torch.sum(mask)
+    unshuffled_scores = scores[X, Y]
+    zero = torch.tensor(0.0, device=unshuffled_scores.device)
 
+    preds = torch.argsort(scores, dim=-1)
+    wrong_mask = (Y != preds)
+    left = torch.cumsum(wrong_mask, dim=-1)
+    right = torch.fliplr(torch.cumsum(torch.fliplr(wrong_mask), dim=-1))
+    train_mask = (left*right).to(torch.bool)
+    #train_mask = train_mask[:, :-1] & train_mask[:, 1:]
+
+    sum = torch.tensor(0.0, device=scores.device)
+    for i in range(cols-1):
+        lower = unshuffled_scores[:, i, None]
+        upper = unshuffled_scores[:, i+1:]
+        msk = mask[:, i+1:]
+
+        losses = torch.max(zero, margin+lower-upper)
+        losses *= (train_mask[:, i, None] & train_mask[:, i+1:])
+        sum += torch.sum(losses[msk])
+
+    loss = sum/total
+    return loss
 
 def cross_entropy_loss(scores, X, Y, mask, **kwargs):
 

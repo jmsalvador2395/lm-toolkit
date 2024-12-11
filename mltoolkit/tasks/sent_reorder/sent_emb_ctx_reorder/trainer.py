@@ -34,7 +34,7 @@ from .loss_functions import (
     hinge_loss, cross_entropy_loss, huber_loss,
     diff_kendall, hinge_pair_loss, exclusive,
     hinge_pair_plus_diff_kendall, hinge_pair_plus_huber,
-    masked_hinge_pair_loss
+    masked_hinge_pair_loss, masked_hinge_loss,
 )
 
 class TrainerSentEmbedCtxReordering(Trainer):
@@ -123,6 +123,8 @@ class TrainerSentEmbedCtxReordering(Trainer):
                 self.loss_fn = hinge_pair_plus_huber
             case 'masked_hinge_pair':
                 self.loss_fn = masked_hinge_pair_loss
+            case 'masked_hinge':
+                self.loss_fn = masked_hinge_loss
             case _:
                 raise ValueError(
                     'loss function should be one of: [`hinge`, '
